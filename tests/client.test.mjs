@@ -19,6 +19,7 @@ test('快取不接受較舊請求覆蓋、讀取失敗清空、無 localStorage 
 let bundled;
 async function source(){
  if(!bundled)bundled=(await build({entryPoints:['src/main.js'],bundle:true,write:false,format:'iife',platform:'browser',
+  define:{__NROP_RELEASE__:JSON.stringify({version:'1.1.0',buildId:'a'.repeat(32),builtAt:'2026-10-27T01:00:00Z'}),'import.meta.env.PROD':'true','import.meta.env.BASE_URL':'"/"'},
   plugins:[{name:'fake-api',setup(build){build.onLoad({filter:/[\\/]src[\\/]api\.js$/},()=>({contents:
    'export const supabase=window.__api.supabase;export const rpc=window.__api.rpc;export const errorMessage=e=>e.message;export const requireApprovalOnlySignup=window.__api.requireApprovalOnlySignup;'}));}}]
  })).outputFiles[0].text;
@@ -28,6 +29,7 @@ const wait=async(condition)=>{for(let i=0;i<100;i++){if(condition())return;await
 async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSchema=true,records=[],unit='7A'}={}){
  const dom=new JSDOM(readFileSync('index.html','utf8'),{url:'https://nrop.example.invalid',runScripts:'outside-only'}),w=dom.window,$=s=>w.document.querySelector(s);
  const calls=[];let current=null;let offline=false;
+ w.fetch=async()=>({ok:true,headers:{get:()=> 'application/json'},json:async()=>({version:'1.1.0',buildId:'a'.repeat(32),builtAt:'2026-10-27T01:00:00Z'})});
  const member={userId:'member-1',name:'測試人員',email:'member@example.invalid',role,status:'active',unit:role==='unit'?unit:null,version:1};
  const config={registrationOpen:true,dataArea:sharedSchema?'shared':undefined,recordStartDate:'2026-08-01',latestRecordDate:'2026-10-25',units:allLoginUnits.map(u=>({id:u.id,beds:u.beds,type:u.type}))};
  if(updatedSchema)config.applicationUnits=[{id:'護理部',reportUnit:null},...config.units.map(u=>({id:u.id,reportUnit:u.id}))];
@@ -48,6 +50,19 @@ async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSche
  const selectUnit=unit=>{const select=$($('#standardEntryGrid').classList.contains('hidden')?'#specialUnitSelect':'#entryUnitSelect');assert.ok(select,'目前卡片必須有單位切換選單');select.value=unit;select.dispatchEvent(new w.Event('change'));};
  return{dom,w,$,calls,login,selectUnit,setOffline:value=>offline=value};
 }
+test('登入及填報頁共用版本入口，平台使用者更新前可保留未儲存內容',async()=>{
+ const {dom,w,$,login}=await mount();let confirmations=0;
+ try{
+  await wait(()=>$('#versionStatus').textContent.includes('最新版本'));
+  assert.equal($('#appVersion').textContent,'NROP v1.1.0');assert.equal($('#appVersion').closest('.hidden'),null);
+  await login();await wait(()=>$('#syncStatus').textContent.includes('已從 Supabase'));
+  w.fetch=async()=>({ok:true,headers:{get:()=> 'application/json'},json:async()=>({version:'1.2.0',buildId:'b'.repeat(32),builtAt:'2026-10-27T02:00:00Z'})});
+  $('#checkVersion').click();await wait(()=>!$('#updateNotice').classList.contains('hidden'));
+  $('#staff').value='1.234';w.confirm=()=>{confirmations++;return false;};$('#reloadVersion').click();
+  assert.equal(confirmations,1);assert.equal($('#staff').value,'1.234');
+  assert.equal($('#appVersion').closest('.hidden'),null);
+ }finally{dom.window.close();}
+});
 test('登入不可任意密碼，平台使用者無管理頁籤，資料存 Supabase RPC 並含版本',async()=>{
  const {dom,w,$,calls,login}=await mount();
  try{

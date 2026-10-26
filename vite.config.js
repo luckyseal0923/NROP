@@ -1,6 +1,14 @@
 import { defineConfig, loadEnv } from 'vite';
+import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
+  // 同一次建置的網頁與版本檔使用相同識別碼，重建相同版號也能辨識。
+  const release = {
+    version: JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version,
+    buildId: randomUUID().replaceAll('-', ''),
+    builtAt: new Date().toISOString()
+  };
   const env = loadEnv(mode, process.cwd(), '');
   const url = env.VITE_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || '';
   const key = env.VITE_SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -10,7 +18,15 @@ export default defineConfig(({ mode }) => {
     if (payload.role !== 'anon') throw new Error('前端 JWT key 必須是 anon 角色');
   }
   return {
+    plugins: [{
+      name: 'nrop-release',
+      apply: 'build',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify(release) + '\n' });
+      }
+    }],
     define: {
+      __NROP_RELEASE__: JSON.stringify({ ...release, development: command === 'serve' }),
       'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(url),
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(key)
     },

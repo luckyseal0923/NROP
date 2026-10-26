@@ -3,12 +3,26 @@ import { units, operationalUnits, allLoginUnits } from './catalog.js';
 import { RecordStore, dateOffset, escapeHtml as esc } from './record-store.js';
 import { $, $$, today } from './dom.js';
 import { createReporting } from './report-renderers.js';
+import { createVersionChecker, createEditGuard } from './app-version.js';
 
 const roles={unit:'平台使用者',admin:'一般管理者',sysadmin:'系統管理者'};
 const statuses={pending:'待審核',active:'啟用',disabled:'停用'};
 let session=null, config=null, busy=false, loading=false, authEpoch=0, accountRows=[], passwordRecovery=false;
 const store=new RecordStore(rpc,new Set(operationalUnits.map(u=>u.id)));
 const reporting=createReporting({store,persistRecord,alertFrom});
+const edits=createEditGuard(document);
+const reportFields='#staff,#openingPatients,.event-input,.special-input';
+function renderReporting(){reporting.render(session);edits.capture('report',reportFields);}
+function hasAuthEdits(){
+ return ['#loginForm','#registerForm','#joinForm','#passwordForm'].some(selector=>{
+  const form=$(selector),dialog=form.closest('dialog');
+  return !form.closest('.hidden,[hidden]')&&(!dialog||dialog.open)&&[...form.querySelectorAll('input')].some(input=>input.value!=='');
+ });
+}
+createVersionChecker({window,current:__NROP_RELEASE__,base:import.meta.env.BASE_URL,enabled:import.meta.env.PROD,
+ hasUnsavedChanges:()=>edits.hasChanges()||hasAuthEdits(),
+ isBusy:()=>busy||loading||$$('#loginForm [type="submit"],#registerForm [type="submit"],#joinForm [type="submit"],#passwordForm [type="submit"],[data-save-account],#registrationOpen').some(button=>button.disabled)
+});
 const feedback=(selector,message,error=false)=>{const el=$(selector);el.textContent=message;el.classList.toggle('hidden',!message);el.classList.toggle('error',error);};
 function toast(message){feedback('#toast',message);clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').classList.add('hidden'),4500);}
 function setDates(date){['#entryDate','#specialDate','#dashboardDate'].forEach(id=>$(id).value=date);}
@@ -22,6 +36,7 @@ function syncControls(){
  ['#saveDraft','#submitRecord','#saveSpecialDraft','#submitSpecialRecord','#setOpening',
  '#entryDate','#entryShift','#specialDate','#specialShift','#dashboardDate','#dashboardShift','#refreshData'].forEach(id=>$(id).disabled=disabled);
  $$('[data-unit-picker]').forEach(select=>select.disabled=disabled);
+ $$(reportFields).forEach(input=>input.disabled=disabled);
 }
 function renderUnitControls(){
  if(!session)return;
@@ -38,7 +53,7 @@ function changeUnit(unit){
  if(!session)return;
  if(busy||loading||!['admin','sysadmin'].includes(session.role)||!config.units.some(u=>u.id===unit)){renderUnitControls();return;}
  const shift=$(operationalUnits.some(u=>u.id===session.unit)?'#specialShift':'#entryShift').value;
- session.unit=unit;$('#entryShift').value=shift;$('#specialShift').value=shift;renderUnitControls();reporting.render(session);
+ session.unit=unit;$('#entryShift').value=shift;$('#specialShift').value=shift;renderUnitControls();renderReporting();
 }
 async function loadConfig(){
  const loaded=await rpc('nrop_public_config');
@@ -61,7 +76,7 @@ async function refreshData(){
   const date=$('#dashboardDate').value;
   const from=[alertFrom(),dateOffset(date,-1)].sort()[0];
   if(!await store.load(from,date))return false;
-  reporting.render(session);
+  renderReporting();
   showView(view);
   $('#syncStatus').textContent='已從 Supabase 更新 '+new Date().toLocaleTimeString('zh-TW');
   return true;
@@ -80,6 +95,7 @@ async function persistRecord(status,payload,special){
  const key=`${special?'OPS|':''}${date}|${shift}|${session.unit}`,version=store.get()[key]?.version||0;
  try{
   await rpc('nrop_save_record',{p_dataset:'live',p_date:date,p_shift:shift,p_unit:session.unit,p_payload:payload,p_status:status,p_version:version});
+  edits.capture('report',reportFields);
   const refreshed=await refreshData();toast(refreshed?(status==='draft'?'已暫存至 Supabase':'已正式送出至 Supabase'):'資料已儲存，但重新讀取失敗，請按重新整理');return true;
  }catch(error){
   feedback('#appError',errorMessage(error),true);
@@ -111,7 +127,7 @@ async function openApp(member){
  showView('entry');await refreshData();
 }
 function clearApp(){
- session=null;store.clear();accountRows=[];$('#accountTable').replaceChildren();$('#auditTable').replaceChildren();
+ session=null;store.clear();accountRows=[];edits.reset();$('#accountTable').replaceChildren();$('#auditTable').replaceChildren();
  $('#entryUnitControl').replaceChildren();$('#specialUnitControl').replaceChildren();
  reporting.clear();
  $('#appView').classList.add('hidden');$('#loginView').classList.remove('hidden');$('#sessionArea').hidden=true;
@@ -195,7 +211,7 @@ $$('.tab').forEach(t=>t.onclick=()=>showView(t.dataset.view));
 ['#entryDate','#specialDate','#dashboardDate'].forEach(id=>{
  $(id).value=today();$(id).max=today();$(id).onchange=async()=>{if(!$(id).reportValidity()||!$(id).value)return;setDates($(id).value);await refreshData();};
 });
-['#entryShift','#specialShift','#dashboardShift'].forEach(id=>$(id).onchange=()=>reporting.render(session));
+['#entryShift','#specialShift','#dashboardShift'].forEach(id=>$(id).onchange=()=>renderReporting());
 $('#refreshData').onclick=async()=>{await refreshData();if(!$('#appError').textContent)showView(document.querySelector('.tab.active')?.dataset.view||'entry');};
 $('#setOpening').onclick=async()=>{
  if(!$('#openingPatients').reportValidity()||busy||loading)return;
@@ -215,6 +231,7 @@ async function loadAccounts(){
     <td><select data-account="status" aria-label="狀態">${Object.entries(statuses).map(([value,label])=>`<option value="${value}"${a.status===value?' selected':''}>${label}</option>`).join('')}</select></td>
     <td><button class="btn btn-primary" data-save-account="${i}">儲存</button></td></tr>`).join('');
   $('#auditTable').innerHTML=audit.map(a=>`<tr><td>${esc(new Date(a.created_at).toLocaleString('zh-TW'))}</td><td>${esc(a.action)}</td><td>${esc(a.target)}</td><td>${esc(accounts.find(x=>x.userId===a.actor_id)?.name||a.actor_id||'資料庫管理者')}</td></tr>`).join('');
+  edits.capture('accounts','#accountTable select,#registrationOpen');
   $$('[data-save-account]').forEach(button=>button.onclick=async()=>{
    button.disabled=true;const i=Number(button.dataset.saveAccount),a=accountRows[i],row=button.closest('tr');
    try{

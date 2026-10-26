@@ -99,6 +99,15 @@
   </main>
   <dialog id="accountDialog"><form id="joinForm" class="hidden"><h2>NROP 存取申請</h2><p>此 Email 已登入 Supabase，請申請 NROP 平台權限。</p><div class="field"><label for="joinName">姓名</label><input id="joinName" required maxlength="80"></div><div class="field"><label for="joinUnit">申請單位</label><select id="joinUnit"></select></div><button class="btn btn-primary" type="submit">送出申請</button></form><div id="membershipNotice"></div><button type="button" class="btn btn-soft" id="membershipRefresh">重新檢查核准狀態</button><button type="button" class="btn btn-soft" id="membershipLogout">登出</button></dialog>
   <dialog id="passwordDialog"><form id="passwordForm"><h2>設定新密碼</h2><p>至少 6 碼，包含英文與數字；共用 Supabase 帳號的其他平台也會使用此密碼。</p><div class="field"><label for="newPassword">新密碼</label><input id="newPassword" type="password" autocomplete="new-password" required minlength="6"></div><div class="field"><label for="confirmPassword">再次輸入新密碼</label><input id="confirmPassword" type="password" autocomplete="new-password" required minlength="6"></div><div id="passwordMessage" class="notice hidden" role="status"></div><button class="btn btn-primary" type="submit">更新密碼</button> <button class="btn btn-soft" id="cancelPassword" type="button">取消</button></form></dialog>
+  <footer class="site-footer" aria-label="網站版本">
+    <span id="appVersion"></span>
+    <button type="button" class="btn btn-soft" id="checkVersion">檢查更新</button>
+    <span id="versionStatus" role="status" aria-live="polite"></span>
+  </footer>
+  <section class="update-notice hidden" id="updateNotice" aria-label="網站更新通知">
+    <div><strong id="updateTitle">有新版本可使用</strong><p id="updateMessage" role="status" aria-live="polite"></p></div>
+    <button type="button" class="btn btn-primary" id="reloadVersion">重新整理以更新</button>
+  </section>
   <div id="toast" class="toast hidden"></div>
 
   <script type="module" src="/src/main.js"></script>

@@ -78,7 +78,7 @@ function hasNursingHomeStaffSplit(record){return nursingHomeStaffFields.every(fi
 function nursingHomeStaff(record){return hasNursingHomeStaffSplit(record)?nursingHomeStaffFields.reduce((sum,field)=>sum+Math.round((Number(record[field])||0)*1000),0)/1000:record.staff||0}
 function renderSpecialForm(){
   const u=operationalUnits.find(x=>x.id===session.unit),data=store.get(),rec=data[operationalKey($('#specialDate').value,$('#specialShift').value,u.id)]||{status:'empty'};
-  $('#specialFormTitle').textContent=`${u.id}每日動態填報`;$('#specialCurrentUnit').textContent=u.id;$('#specialBeds').textContent=`${u.beds} 床`;
+  $('#specialFormTitle').textContent=`${u.id}每日動態填報`;$('#specialBeds').textContent=`${u.beds} 床`;
   const isNursingHome=u.type==='nursingHome',needsBreakdown=isNursingHome&&!hasNursingHomeStaffSplit(rec)&&(rec.staff||0)>0;
   $('#specialFields').innerHTML=u.fields.map(([field,label])=>{
     const isStaff=specialStaffFields.includes(field),isPart=isNursingHome&&nursingHomeStaffFields.includes(field),isTotal=isNursingHome&&field==='staff',value=isTotal?nursingHomeStaff(rec):rec[field]??(isPart&&needsBreakdown?'':0);

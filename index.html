@@ -46,14 +46,14 @@
   <main id="appView" class="wrap hidden">
     <div class="page-head"><div><h1 id="pageTitle">單位每日填報</h1><p id="pageSubtitle"></p></div><div class="tabs"><button class="tab active" data-view="entry">單位填報</button><button class="tab" data-view="dashboard">管理儀表板</button><button class="tab hidden" data-view="accounts">帳號管理</button></div></div>
 
-    <div class="platform-tools"><label id="managedUnitField" class="hidden">填報單位 <select id="managedUnit"></select></label><button type="button" class="btn btn-soft" id="refreshData">重新整理</button><span id="syncStatus" role="status"></span></div>
+    <div class="platform-tools"><button type="button" class="btn btn-soft" id="refreshData">重新整理</button><span id="syncStatus" role="status"></span></div>
     <div id="appError" class="notice error hidden" role="alert"></div>
     <section id="entryView">
       <div class="grid-2" id="entryLayout">
       <div class="entry-forms">
       <div id="standardEntryGrid">
         <article class="card"><div class="card-head"><h2>當班動態資料</h2><span id="recordStatus" class="status empty">尚未填寫</span></div><div class="card-body">
-          <div class="form-context"><div class="context-box"><small>填報單位</small><strong id="currentUnit"></strong></div><div class="context-box"><small>日期</small><input type="date" id="entryDate" style="border:0;background:transparent;width:100%;font-weight:700"></div><div class="context-box"><small>班別</small><select id="entryShift" style="border:0;background:transparent;width:100%;font-weight:700"><option value="N">N｜00–08</option><option value="D">D｜08–16</option><option value="E">E｜16–24</option></select></div><div class="context-box"><small>有效床數</small><strong><span id="bedCount">0</span> 床</strong></div></div>
+          <div class="form-context"><div class="context-box"><small id="entryUnitLabel">填報單位</small><div class="unit-context" id="entryUnitControl"></div></div><div class="context-box"><small>日期</small><input type="date" id="entryDate" style="border:0;background:transparent;width:100%;font-weight:700"></div><div class="context-box"><small>班別</small><select id="entryShift" style="border:0;background:transparent;width:100%;font-weight:700"><option value="N">N｜00–08</option><option value="D">D｜08–16</option><option value="E">E｜16–24</option></select></div><div class="context-box"><small>有效床數</small><strong><span id="bedCount">0</span> 床</strong></div></div>
           <div id="previousNotice" class="notice hidden"></div>
           <div class="notice hidden" id="openingControls"><p>首次啟用的單位，由管理者確認期初住院人數。</p><label>期初住院人數 <input id="openingPatients" type="number" min="0" step="1" value="0"></label> <button type="button" class="btn btn-soft" id="setOpening">設定期初人數</button></div>
           <div class="input-section"><h3>人力與前班基準</h3><div class="entry-grid"><div class="number-field"><label>實際上班人力 <span class="required">*</span></label><input id="staff" type="number" min="0" step="0.001" inputmode="decimal" required value="0"></div><div class="number-field"><label>前一班住院人數</label><input id="previous" type="number" readonly value="0"></div></div></div>
@@ -64,7 +64,7 @@
       </div>
       <div id="specialEntryView" class="hidden">
         <article class="card"><div class="card-head"><div><h2 id="specialFormTitle">特殊單位填報</h2><small style="color:var(--muted)">本區除合計外均為人工輸入</small></div><span id="specialRecordStatus" class="status empty">尚未填寫</span></div><div class="card-body">
-          <div class="form-context"><div class="context-box"><small>填報單位</small><strong id="specialCurrentUnit"></strong></div><div class="context-box"><small>日期</small><input type="date" id="specialDate" style="border:0;background:transparent;width:100%;font-weight:700"></div><div class="context-box"><small>班別</small><select id="specialShift" style="border:0;background:transparent;width:100%;font-weight:700"><option value="N">N｜00–08</option><option value="D">D｜08–16</option><option value="E">E｜16–24</option></select></div><div class="context-box"><small>參考床數</small><strong id="specialBeds">—</strong></div></div>
+          <div class="form-context"><div class="context-box"><small id="specialUnitLabel">填報單位</small><div class="unit-context" id="specialUnitControl"></div></div><div class="context-box"><small>日期</small><input type="date" id="specialDate" style="border:0;background:transparent;width:100%;font-weight:700"></div><div class="context-box"><small>班別</small><select id="specialShift" style="border:0;background:transparent;width:100%;font-weight:700"><option value="N">N｜00–08</option><option value="D">D｜08–16</option><option value="E">E｜16–24</option></select></div><div class="context-box"><small>參考床數</small><strong id="specialBeds">—</strong></div></div>
           <div class="input-section"><h3>當班填報內容</h3><div id="staffBreakdownNotice" class="notice hidden"></div><div class="entry-grid" id="specialFields"></div></div>
           <div class="actions"><button class="btn btn-soft" id="saveSpecialDraft">暫存</button><button class="btn btn-primary" id="submitSpecialRecord">正式送出</button></div>
         </div></article>

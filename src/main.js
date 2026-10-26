@@ -19,8 +19,26 @@ function alertFrom(){
 }
 function syncControls(){
  const disabled=busy||loading;
- ['#saveDraft','#submitRecord','#saveSpecialDraft','#submitSpecialRecord','#setOpening','#managedUnit',
+ ['#saveDraft','#submitRecord','#saveSpecialDraft','#submitSpecialRecord','#setOpening',
  '#entryDate','#entryShift','#specialDate','#specialShift','#dashboardDate','#dashboardShift','#refreshData'].forEach(id=>$(id).disabled=disabled);
+ $$('[data-unit-picker]').forEach(select=>select.disabled=disabled);
+}
+function renderUnitControls(){
+ if(!session)return;
+ const canSwitch=session.role==='admin'||session.role==='sysadmin';
+ for(const type of ['entry','special']){
+  const container=$('#'+type+'UnitControl');container.replaceChildren();
+  if(!canSwitch){const label=document.createElement('strong');label.textContent=session.unit;container.append(label);continue;}
+  const select=document.createElement('select');select.id=type+'UnitSelect';select.dataset.unitPicker='';select.setAttribute('aria-labelledby',type+'UnitLabel');
+  for(const unit of config.units){const option=document.createElement('option');option.value=unit.id;option.textContent=unit.id;select.append(option);}
+  select.value=session.unit;select.disabled=busy||loading;select.onchange=()=>changeUnit(select.value);container.append(select);
+ }
+}
+function changeUnit(unit){
+ if(!session)return;
+ if(busy||loading||!['admin','sysadmin'].includes(session.role)||!config.units.some(u=>u.id===unit)){renderUnitControls();return;}
+ const shift=$(operationalUnits.some(u=>u.id===session.unit)?'#specialShift':'#entryShift').value;
+ session.unit=unit;$('#entryShift').value=shift;$('#specialShift').value=shift;renderUnitControls();reporting.render(session);
 }
 async function loadConfig(){
  const loaded=await rpc('nrop_public_config');
@@ -30,7 +48,6 @@ async function loadConfig(){
  for(const serverUnit of config.units){const local=allLoginUnits.find(u=>u.id===serverUnit.id);if(local)local.beds=serverUnit.beds;}
  const applicationUnits=config.applicationUnits||[{id:'護理部'},...config.units];
  ['#registerUnit','#joinUnit'].forEach(id=>$(id).innerHTML=applicationUnits.map(u=>`<option value="${esc(u.id)}">${esc(u.id)}</option>`).join(''));
- $('#managedUnit').innerHTML=config.units.map(u=>`<option value="${esc(u.id)}">${esc(u.id)}</option>`).join('');
  document.querySelector('[data-auth="register"]').disabled=!config.registrationOpen;
  feedback('#connectionStatus',`已連線 Supabase${config.registrationOpen?'':' · 目前暫停新帳號申請'}`);
 }
@@ -89,13 +106,13 @@ async function openApp(member){
  $('#pageSubtitle').textContent=member.role==='unit'?`${member.unit} 單位資料僅供授權人員填寫`:'依權限管理全院填報資料；異常紀錄顯示所選日期之前最多 30 天';
  document.querySelector('[data-view="dashboard"]').classList.toggle('hidden',member.role==='unit');
  document.querySelector('[data-view="accounts"]').classList.toggle('hidden',member.role!=='sysadmin');
- $('#managedUnitField').classList.toggle('hidden',member.role==='unit');$('#managedUnit').value=session.unit;
- $('#currentUnit').textContent=session.unit;
+ renderUnitControls();
  if(!sameUser)setDates(today());
  showView('entry');await refreshData();
 }
 function clearApp(){
  session=null;store.clear();accountRows=[];$('#accountTable').replaceChildren();$('#auditTable').replaceChildren();
+ $('#entryUnitControl').replaceChildren();$('#specialUnitControl').replaceChildren();
  reporting.clear();
  $('#appView').classList.add('hidden');$('#loginView').classList.remove('hidden');$('#sessionArea').hidden=true;
  $('#accountDialog').close();$('#passwordDialog').close();
@@ -175,7 +192,6 @@ $('#passwordForm').onsubmit=e=>{e.preventDefault();void(async()=>{
 })();};
 
 $$('.tab').forEach(t=>t.onclick=()=>showView(t.dataset.view));
-$('#managedUnit').onchange=()=>{session.unit=$('#managedUnit').value;$('#currentUnit').textContent=session.unit;reporting.render(session);};
 ['#entryDate','#specialDate','#dashboardDate'].forEach(id=>{
  $(id).value=today();$(id).max=today();$(id).onchange=async()=>{if(!$(id).reportValidity()||!$(id).value)return;setDates($(id).value);await refreshData();};
 });

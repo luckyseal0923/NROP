@@ -71,7 +71,7 @@ button:disabled { opacity: .55; cursor: wait; transform: none; }
 .notice.error { color: #8c2020; background: #fff2f2; border-color: #e6b5b5; }
 .platform-tools { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 16px; }
 .platform-tools label { font-weight: 700; }
-.platform-tools select, #accountTable select, #openingPatients { font: inherit; padding: 9px; border: 1px solid var(--input-line); border-radius: 8px; background: #fff; max-width: 100%; }
+#accountTable select, #openingPatients { font: inherit; padding: 9px; border: 1px solid var(--input-line); border-radius: 8px; background: #fff; max-width: 100%; }
 #syncStatus { color: var(--muted); font-size: 13px; }
 #accountTable td { vertical-align: middle; }
 #accountTable select { min-width: 100px; }
@@ -112,6 +112,9 @@ dialog p { line-height: 1.7; }
 .context-box small { display: block; color: var(--muted); margin-bottom: 5px; }
 .context-box strong { font-size: 17px; color: var(--navy); }
 .context-box input, .context-box select { color: var(--text); }
+.unit-context { min-width: 0; display: flex; min-height: 34px; align-items: center; justify-content: center; }
+.unit-context select { width: 100%; min-width: 0; max-width: 100%; border: 1px solid var(--input-line); border-radius: 8px; background: #fff; padding: 7px 9px; font: inherit; font-weight: 700; }
+.unit-context select:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
 .input-section { padding: 20px 0; border-top: 1px solid var(--line); }
 .input-section:first-of-type { border-top: 0; padding-top: 0; }
 .input-section h3 { font-size: 15px; margin: 0 0 14px; color: var(--navy); }

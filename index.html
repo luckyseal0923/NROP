@@ -101,22 +101,31 @@
         <div id="bedSettingsFeedback" class="notice hidden" role="status"></div>
         <div id="bedSettingsContent" class="hidden">
           <div class="formula">目前全院有效病床數：<strong id="bedHospitalTotal">—</strong>（一般病房及特殊住院單位）。其他單位維持原有的參考床數或獨立統計用途。</div>
-          <div class="table-wrap bed-table"><table><thead><tr><th>單位</th><th>用途</th><th>目前床數</th><th>已排定的後續調整</th><th>操作</th></tr></thead><tbody id="bedSettingsTable"></tbody></table></div>
-          <form id="bedSettingsForm" class="input-section">
-            <h3>調整床數</h3>
-            <div class="entry-grid"><div class="field"><label for="bedUnit">單位</label><select id="bedUnit" required></select></div><div class="field"><label for="bedEffectiveDate">生效日期</label><input id="bedEffectiveDate" type="date" max="2100-12-31" required></div><div class="field"><label>該日期原床數</label><strong id="bedOriginal">—</strong></div><div class="field"><label for="newBeds">調整後床數</label><input id="newBeds" type="number" min="0" max="9999" step="1" required></div></div>
-            <div class="field"><label for="bedReason">調整原因（選填）</label><input id="bedReason" maxlength="400"></div>
-            <p class="notice">更改病床數將影響計算母數，請確認調整內容是否正確。若已排定下一筆設定，之後會依下一筆生效日期套用。</p>
-            <div class="actions"><button type="submit" class="btn btn-primary">核對並驗證帳號密碼</button></div>
-          </form>
+          <div id="bedUnitCards"></div>
         </div>
       </div></article>
-      <article class="card dashboard-section"><div class="card-head"><h2>最近 100 筆床數調整紀錄</h2></div><div class="table-wrap"><table><thead><tr><th>修改時間（臺灣）</th><th>單位</th><th>生效日期</th><th>原床數 → 新床數</th><th>操作者</th><th>原因</th></tr></thead><tbody id="bedHistory"></tbody></table></div></article>
     </section>
     <div class="footnote">資料儲存於 Supabase · 人力可填至小數點第三位</div>
   </main>
   <dialog id="accountDialog"><form id="joinForm" class="hidden"><h2>NROP 存取申請</h2><p>此 Email 已登入 Supabase，請申請 NROP 平台權限。</p><div class="field"><label for="joinName">姓名</label><input id="joinName" required maxlength="80"></div><div class="field"><label for="joinUnit">申請單位</label><select id="joinUnit"></select></div><button class="btn btn-primary" type="submit">送出申請</button></form><div id="membershipNotice"></div><button type="button" class="btn btn-soft" id="membershipRefresh">重新檢查核准狀態</button><button type="button" class="btn btn-soft" id="membershipLogout">登出</button></dialog>
   <dialog id="passwordDialog"><form id="passwordForm"><h2>設定新密碼</h2><p>至少 6 碼，包含英文與數字；共用 Supabase 帳號的其他平台也會使用此密碼。</p><div class="field"><label for="newPassword">新密碼</label><input id="newPassword" type="password" autocomplete="new-password" required minlength="6"></div><div class="field"><label for="confirmPassword">再次輸入新密碼</label><input id="confirmPassword" type="password" autocomplete="new-password" required minlength="6"></div><div id="passwordMessage" class="notice hidden" role="status"></div><button class="btn btn-primary" type="submit">更新密碼</button> <button class="btn btn-soft" id="cancelPassword" type="button">取消</button></form></dialog>
+  <dialog id="bedEditDialog" class="bed-edit-dialog" aria-labelledby="bedEditTitle">
+    <div class="bed-edit-head"><div><h2 id="bedEditTitle">調整病床數</h2><p id="bedEditType"></p></div><button type="button" class="btn btn-soft" id="closeBedEdit" aria-label="關閉床數調整">關閉</button></div>
+    <div class="bed-edit-layout">
+      <form id="bedSettingsForm">
+        <div class="bed-edit-context"><div><small>填報單位</small><strong id="bedUnitName">—</strong></div><div><small>目前床數</small><strong id="bedEditCurrent">—</strong></div></div>
+        <div class="bed-edit-fields"><div class="field"><label for="bedEffectiveDate">生效日期</label><input id="bedEffectiveDate" type="date" max="2100-12-31" required></div><div class="field"><label>該日期原床數</label><strong id="bedOriginal">—</strong></div><div class="field"><label for="newBeds">調整後床數</label><input id="newBeds" type="number" min="0" max="9999" step="1" required></div></div>
+        <div class="field"><label for="bedReason">調整原因（選填）</label><input id="bedReason" maxlength="400"></div>
+        <p class="notice bed-warning">更改病床數將影響計算母數，請確認調整內容是否正確。生效日 N／D／E 三班共同套用，之前日期維持原母數；若有後續排定設定，依其日期接續套用。</p>
+        <div id="bedEditFeedback" class="notice hidden" role="alert"></div>
+        <div class="actions"><button type="button" class="btn btn-soft" id="cancelBedEdit">取消調整</button><button type="submit" class="btn btn-primary">核對並驗證帳號密碼</button></div>
+      </form>
+      <aside class="bed-edit-history" aria-label="本單位床數調整歷史">
+        <h3>過去調整紀錄</h3><p id="bedHistoryNote" class="bed-history-note"></p><div id="bedUnitHistory" class="bed-history-list"></div>
+        <h3>床數設定沿革</h3><p class="bed-history-note">依生效日期排列，包含原始基準及已排定設定。</p><div id="bedUnitTimeline" class="bed-history-list"></div>
+      </aside>
+    </div>
+  </dialog>
   <dialog id="bedConfirmDialog" aria-labelledby="bedConfirmTitle"><form id="bedConfirmForm">
     <h2 id="bedConfirmTitle">確認調整病床數</h2>
     <p class="notice bed-warning"><strong>更改病床數將影響計算母數，請確認調整內容是否正確。</strong></p>

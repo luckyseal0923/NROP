@@ -26,7 +26,7 @@ async function source(){
  return bundled;
 }
 const wait=async(condition)=>{for(let i=0;i<100;i++){if(condition())return;await new Promise(r=>setTimeout(r,5));}throw new Error('UI 等候逾時');};
-async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSchema=true,bedSchema=true,records=[],unit='7A',capacities=[]}={}){
+async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSchema=true,bedSchema=true,records=[],unit='7A',capacities=[],bedHistory=[]}={}){
  const dom=new JSDOM(readFileSync('index.html','utf8'),{url:'https://nrop.example.invalid',runScripts:'outside-only'}),w=dom.window,$=s=>w.document.querySelector(s);
  const calls=[];let current=null;let offline=false;
  w.fetch=async()=>({ok:true,headers:{get:()=> 'application/json'},json:async()=>({version:'1.1.0',buildId:'a'.repeat(32),builtAt:'2026-10-27T01:00:00Z'})});
@@ -43,7 +43,7 @@ async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSche
   if(name==='nrop_request_access')return current;
   if(name==='nrop_list_records')return records;if(name==='nrop_list_openings')return[];
   if(name==='nrop_list_bed_capacities')return bedRows;
-  if(name==='nrop_admin_bed_settings')return{today:'2026-10-27',units:config.units.map(u=>({...u,version:1,periods:bedRows.filter(b=>b.unit===u.id)})),history:[]};
+  if(name==='nrop_admin_bed_settings')return{today:'2026-10-27',units:config.units.map(u=>({...u,version:1,periods:bedRows.filter(b=>b.unit===u.id)})),history:bedHistory};
   if(name==='nrop_prepare_bed_change'){prepared=params;return{requestId:'bed-request',unit:params.p_unit,effectiveDate:params.p_date,oldBeds:bedRows.filter(b=>b.unit===params.p_unit&&b.effectiveDate<=params.p_date).at(-1).beds,newBeds:params.p_beds,reason:params.p_reason};}
   if(name==='nrop_admin_accounts')return[{...member,name:'<img src=x onerror="alert(1)">',requestedUnit:'6A'}];
   if(name==='nrop_admin_audit')return[];if(name==='nrop_save_record')return{};
@@ -72,13 +72,15 @@ test('系統管理者可查看床數並再次輸入本人帳密，取消或驗�
  const {dom,w,$,calls,login}=await mount('sysadmin');
  try{
   await login();await wait(()=>!$('#refreshData').disabled);
-  $('[data-view="beds"]').click();await wait(()=>$('#bedSettingsTable').children.length===28);
+  $('[data-view="beds"]').click();await wait(()=>w.document.querySelectorAll('.bed-unit-card').length===28);
   assert.equal($('#bedSettingsContent').closest('.hidden'),null);assert.ok($('#bedHospitalTotal').textContent.includes('626'));
-  $('[data-edit-bed="7A"]').click();$('#newBeds').value='40';$('#bedEffectiveDate').value='2026-10-28';
+  assert.equal($('#bedSettingsTable'),null);assert.equal($('#bedHistory'),null);assert.equal($('#bedEditDialog').open,false);
+  assert.equal($('#bedSettingsForm').closest('dialog').id,'bedEditDialog');
+  $('[data-edit-bed="7A"]').click();assert.equal($('#bedEditDialog').open,true);$('#newBeds').value='40';$('#bedEffectiveDate').value='2026-10-28';
   $('#bedSettingsForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await wait(()=>$('#bedConfirmDialog').open);
   assert.ok($('#bedConfirmSummary').textContent.includes('45 床 → 40 床'));assert.ok($('#bedConfirmSummary').textContent.includes('N／D／E'));
   assert.equal($('#bedConfirmAccount').value,'');assert.equal($('#bedConfirmPassword').value,'');
-  $('#cancelBedConfirm').click();assert.equal($('#bedConfirmDialog').open,false);assert.equal(calls.filter(c=>c.name==='bed.confirm').length,0);
+  $('#cancelBedConfirm').click();assert.equal($('#bedConfirmDialog').open,false);assert.equal($('#bedEditDialog').open,true);assert.equal($('#newBeds').value,'40');assert.equal(calls.filter(c=>c.name==='bed.confirm').length,0);
   $('#bedSettingsForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await wait(()=>$('#bedConfirmDialog').open);
   $('#bedReviewed').checked=true;$('#bedConfirmAccount').value='other@example.invalid';$('#bedConfirmPassword').value='correct';
   $('#bedConfirmForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
@@ -88,8 +90,39 @@ test('系統管理者可查看床數並再次輸入本人帳密，取消或驗�
   assert.equal($('#bedConfirmDialog').open,true);assert.ok($('#bedConfirmFeedback').textContent.includes('密碼錯誤'));assert.equal($('#bedConfirmPassword').value,'');
   $('#bedConfirmPassword').value='correct';$('#bedConfirmForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
   await wait(()=>$('#bedSettingsFeedback').textContent.includes('已儲存'));
-  assert.equal($('#bedConfirmDialog').open,false);assert.equal($('#bedConfirmPassword').value,'');
+  assert.equal($('#bedConfirmDialog').open,false);assert.equal($('#bedEditDialog').open,false);assert.equal($('#bedConfirmPassword').value,'');
   assert.equal(calls.filter(c=>c.name==='bed.confirm').length,2);
+ }finally{dom.window.close();}
+});
+
+test('單位卡片開啟固定單位彈框，只顯示本單位紀錄與完整生效沿革，關閉後不殘留',async()=>{
+ const history=[{unit:'7A',before:{beds:45},after:{beds:42,effectiveDate:'2026-10-20',reason:'測試調整 7A'},createdAt:'2026-10-19T09:00:00Z',actor:'管理者 A'},
+ {unit:'7B',before:{beds:45},after:{beds:40,effectiveDate:'2026-10-21',reason:'僅屬於 7B'},createdAt:'2026-10-20T09:00:00Z',actor:'管理者 B'}];
+ const capacities=[{unit:'7A',effectiveDate:'2026-10-20',beds:42},{unit:'7A',effectiveDate:'2026-10-30',beds:40}];
+ const {dom,w,$,calls,login}=await mount('sysadmin',{bedHistory:history,capacities});
+ try{
+  await login();await wait(()=>!$('#refreshData').disabled);$('[data-view="beds"]').click();await wait(()=>w.document.querySelectorAll('.bed-unit-card').length===28);
+  assert.equal(w.document.querySelectorAll('.bed-unit-group').length,3);assert.ok($('[data-bed-unit="7A"]').textContent.includes('2026-10-30 起 40 床'));
+  $('[data-edit-bed="7A"]').click();assert.equal($('#bedEditTitle').textContent,'7A 床數調整');assert.equal($('#bedUnitName').textContent,'7A');assert.equal($('#bedUnit'),null);
+  assert.match($('#bedUnitHistory').textContent,/45 床 → 42 床/);assert.match($('#bedUnitHistory').textContent,/管理者 A/);assert.doesNotMatch($('#bedUnitHistory').textContent,/管理者 B|僅屬於 7B/);
+  assert.equal($('#bedUnitTimeline').children.length,3);assert.match($('#bedUnitTimeline').textContent,/原始床數基準|2026-10-30/);
+  $('#newBeds').value='39';$('#bedReason').value='尚未送出';$('#cancelBedEdit').click();assert.equal($('#bedEditDialog').open,false);assert.equal(calls.filter(c=>c.name==='nrop_prepare_bed_change').length,0);
+  $('[data-edit-bed="7B"]').click();assert.equal($('#bedReason').value,'');assert.equal($('#bedUnitName').textContent,'7B');assert.match($('#bedUnitHistory').textContent,/僅屬於 7B/);assert.doesNotMatch($('#bedUnitHistory').textContent,/測試調整 7A/);
+  $('#bedEditDialog').dispatchEvent(new w.Event('cancel',{cancelable:true}));assert.equal($('#bedEditDialog').open,false);
+  $('[data-edit-bed="7A"]').click();$('#newBeds').value='40';$('#logoutBtn').click();await wait(()=>$('#loginView').classList.contains('hidden')===false);
+  assert.equal($('#bedEditDialog').open,false);assert.equal($('#bedUnitCards').children.length,0);assert.equal($('#bedUnitHistory').children.length,0);
+  await new Promise(resolve=>w.setTimeout(resolve,0));
+ }finally{dom.window.close();}
+});
+
+test('歷史文字安全轉義，近期紀錄不足時不把完整沿革誤當沒有歷史',async()=>{
+ const history=Array.from({length:100},(_,i)=>({unit:'7B',before:{beds:45},after:{beds:40,effectiveDate:'2026-10-20',reason:'other'},createdAt:'2026-10-19T09:00:00Z',actor:'other'}));
+ history[0]={unit:'7A',before:{beds:45},after:{beds:42,effectiveDate:'2026-10-20',reason:'<img src=x onerror="alert(1)">'},createdAt:'2026-10-19T09:00:00Z',actor:'<script>bad</script>'};
+ const {dom,w,$,login}=await mount('sysadmin',{bedHistory:history,capacities:[{unit:'6A',effectiveDate:'2026-10-20',beds:30}]});
+ try{
+  await login();await wait(()=>!$('#refreshData').disabled);$('[data-view="beds"]').click();await wait(()=>w.document.querySelectorAll('.bed-unit-card').length===28);
+  $('[data-edit-bed="7A"]').click();assert.equal($('#bedUnitHistory img'),null);assert.equal($('#bedUnitHistory script'),null);assert.match($('#bedUnitHistory').textContent,/<img/);assert.match($('#bedHistoryNote').textContent,/全院最近 100 筆/);
+  $('#closeBedEdit').click();$('[data-edit-bed="6A"]').click();assert.match($('#bedUnitHistory').textContent,/近期載入/);assert.equal($('#bedUnitTimeline').children.length,2);assert.match($('#bedUnitTimeline').textContent,/30 床/);
  }finally{dom.window.close();}
 });
 

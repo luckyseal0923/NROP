@@ -1,0 +1,11 @@
+Generation method: built-in image_gen, edit/compositing
+Final asset: assets/nrop-hospital-hero.png
+
+Use case: compositing
+Asset type: full-bleed rectangular nursing operations website hero illustration, portrait 3:4.
+Input image 1: EDIT TARGET — the rectangular blue hospital and floating medical-data dashboard scene. Preserve its scene, composition, style, colors, clean full-bleed rectangular edges, and the absence of any circular frame.
+Input image 2: supporting insert / exact wordmark design reference — the original circular NROP artwork. Use ONLY its wide NROP wordmark lettering as the reference; do not bring over the circular badge, white exterior, or Chinese subtitle.
+Edit request: integrate the original large NROP wordmark from image 2 into the lower-middle of image 1, centered at roughly 62 percent of the canvas height. Keep it about 80 percent of the canvas width, with generous margin on both sides. It must feel naturally part of the same blue hero illustration, without any surrounding white panel, circle, border, logo tile or sticker.
+Preserve the original NROP letter design very closely: bold geometric N R O P, white-to-icy-blue gradients, vivid cyan accents; especially the O formed by the segmented cyan circular ring containing the glowing ECG trace. Exact lettering: NROP. All four letters clear, fully inside the frame, no altered spelling. The NROP wordmark itself stays bright and legible.
+Keep the hospital, medical cross, ECG dashboard, charts and cyan flowing light paths visually prominent above the wordmark. Continue the scene seamlessly behind and around the lettering. Keep the bottom 20 percent of the entire canvas mostly uncluttered deep navy #03152f so live HTML title and description can sit there later.
+Constraints: modify only what is necessary to add this integrated original-style NROP lettering. No enclosing circular silhouette or white outer ring. No Chinese text, no other words or numbers, no inset frame, no surrounding mockup, no new characters, no form controls. Opaque rectangular full-bleed image.

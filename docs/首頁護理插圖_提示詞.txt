@@ -1,0 +1,12 @@
+Generation method: built-in image_gen
+Final asset: assets/nursing-care-rose.png
+
+Use case: stylized-concept
+Asset type: polished modern 3D illustration for a Taiwanese nursing operations web platform login panel.
+Primary request: a fresh, sophisticated, contemporary healthcare web illustration. A stylized professional nurse with a clean dark bob haircut, wearing simple modern dusty-rose scrubs and white sneakers, stands holding a tablet. Beside them are two generously spaced floating rounded 3D tiles: one with a simple sculpted heart, one with an abstract hospital bed symbol. A small ivory and blush pill-shaped platform grounds the composition. Compact, visually striking and uncluttered.
+Style/medium: premium 2026 product-design aesthetic, carefully art-directed matte clay 3D render, smooth simplified sculptural geometry, adult proportions mildly stylized, refined friendly face with tiny simple facial features, no photorealism. Think high-end contemporary product onboarding illustration, restrained rather than toy-like.
+Composition/framing: landscape 4:3, entire scene centered with ample clean negative space, all objects inside frame, readable at 350px wide. Small tight palette, just one character and the two symbolic tiles. No hospital room scene.
+Color palette: powder blush pink #fff0f4 background; dusty pink #d7799c, soft berry #a74469, creamy ivory #fffaf5, a little deep plum for hair and tiny details.
+Lighting/mood: bright airy studio lighting, soft ambient occlusion, subtle short shadows, clean premium finish.
+Text: no text, letters or numbers anywhere.
+Avoid: painterly or watercolor textures, vintage medical-poster look, realistic portraits, sick-bed patient scenes, ornamental flowers, busy scenery, nurse cap, red-cross emblem, stethoscope cliches, exaggerated cute baby proportions, logos and watermarks.

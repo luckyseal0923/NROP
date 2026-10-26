@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 import { createVersionChecker, createEditGuard } from '../src/app-version.js';
+import {nextRelease} from '../scripts/next-release.mjs';
 
-const current = { version: '1.1.0', buildId: 'a'.repeat(32), builtAt: '2026-10-27T01:00:00Z' };
-const next = { ...current, version: '1.2.0', buildId: 'b'.repeat(32) };
+const current = { version: '1.1.0', displayVersion:'NROP-20261027-01', buildId: 'a'.repeat(32), builtAt: '2026-10-27T01:00:00Z' };
+const next = { ...current, version: '1.2.0', displayVersion:'NROP-20261027-02', buildId: 'b'.repeat(32) };
 const response = (release = current) => ({ ok: true, headers: { get: () => 'application/json' }, json: async () => release });
 function mount(options = {}) {
   const dom = new JSDOM(readFileSync('index.html', 'utf8'), { url: 'https://nrop.example.invalid/', pretendToBeVisual: true });
@@ -20,7 +21,7 @@ test('頁尾顯示目前版本，手動檢查避開快取且不傳送帳號資�
   const app = mount({ base: '/platform/' });
   try {
     await app.checker.check();
-    assert.equal(app.$('#appVersion').textContent, 'NROP v1.1.0');
+    assert.equal(app.$('#appVersion').textContent, 'NROP-20261027-01');
     assert.match(app.$('#appVersion').title, /2026.*aaaa/si);
     assert.equal(app.$('#versionStatus').textContent, '目前已是最新版本');
     const [url, options] = app.calls[0];
@@ -40,8 +41,8 @@ test('相同版號重新建置仍提示更新，不自動重新整理；檢查�
     app.setResponse(() => response({ ...next, version: current.version }));
     await app.checker.check();
     assert.ok(!app.$('#updateNotice').classList.contains('hidden'));
-    assert.equal(app.$('#appVersion').textContent, 'NROP v1.1.0');
-    assert.equal(app.$('#updateTitle').textContent, '可更新至 v1.1.0');
+    assert.equal(app.$('#appVersion').textContent, 'NROP-20261027-01');
+    assert.equal(app.$('#updateTitle').textContent, '可更新至 NROP-20261027-02');
     assert.deepEqual(app.reloads, []);
     app.setResponse(() => { throw new Error('offline'); });
     await app.checker.check();
@@ -154,4 +155,21 @@ test('本機開發顯示開發標記，未部署的變更不誤報為網站新�
     assert.equal(app.calls.length, 0); assert.match(app.$('#appVersion').textContent, /本機開發/);
     assert.ok(app.$('#checkVersion').disabled);
   } finally { app.close(); }
+});
+
+test('發布名稱固定日期與兩碼流水號，同日遞增、換日回到 01，99 後拒絕覆用',()=>{
+ assert.equal(nextRelease('20261027-01','20261027'),'20261027-02');
+ assert.equal(nextRelease('20261027-09','20261027'),'20261027-10');
+ assert.equal(nextRelease('20261027-99','20261028'),'20261028-01');
+ assert.throws(()=>nextRelease('20261027-99','20261027'),/99/);
+});
+
+test('更新檔保留舊版識別欄位，新介面可讀取尚無新版名稱的舊發布檔',async()=>{
+ const app=mount();
+ try{
+  await app.checker.check();
+  const legacy={version:'1.0.0',buildId:'c'.repeat(32),builtAt:current.builtAt};
+  app.setResponse(()=>response(legacy));await app.checker.check();
+  assert.equal(app.$('#updateTitle').textContent,'可更新至 NROP v1.0.0');
+ }finally{app.close();}
 });

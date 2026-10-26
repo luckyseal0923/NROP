@@ -19,19 +19,20 @@ test('快取不接受較舊請求覆蓋、讀取失敗清空、無 localStorage 
 let bundled;
 async function source(){
  if(!bundled)bundled=(await build({entryPoints:['src/main.js'],bundle:true,write:false,format:'iife',platform:'browser',
-  define:{__NROP_RELEASE__:JSON.stringify({version:'1.1.0',buildId:'a'.repeat(32),builtAt:'2026-10-27T01:00:00Z'}),'import.meta.env.PROD':'true','import.meta.env.BASE_URL':'"/"'},
+  define:{__NROP_RELEASE__:JSON.stringify({version:'1.1.0',displayVersion:'NROP-20261027-01',buildId:'a'.repeat(32),builtAt:'2026-10-27T01:00:00Z'}),'import.meta.env.PROD':'true','import.meta.env.BASE_URL':'"/"'},
   plugins:[{name:'fake-api',setup(build){build.onLoad({filter:/[\\/]src[\\/]api\.js$/},()=>({contents:
-   'export const supabase=window.__api.supabase;export const rpc=window.__api.rpc;export const errorMessage=e=>e.message;export const requireApprovalOnlySignup=window.__api.requireApprovalOnlySignup;'}));}}]
+   'export const supabase=window.__api.supabase;export const rpc=window.__api.rpc;export const errorMessage=e=>e.message;export const requireApprovalOnlySignup=window.__api.requireApprovalOnlySignup;export const confirmBedChange=window.__api.confirmBedChange;'}));}}]
  })).outputFiles[0].text;
  return bundled;
 }
 const wait=async(condition)=>{for(let i=0;i<100;i++){if(condition())return;await new Promise(r=>setTimeout(r,5));}throw new Error('UI 等候逾時');};
-async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSchema=true,records=[],unit='7A'}={}){
+async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSchema=true,bedSchema=true,records=[],unit='7A',capacities=[]}={}){
  const dom=new JSDOM(readFileSync('index.html','utf8'),{url:'https://nrop.example.invalid',runScripts:'outside-only'}),w=dom.window,$=s=>w.document.querySelector(s);
  const calls=[];let current=null;let offline=false;
  w.fetch=async()=>({ok:true,headers:{get:()=> 'application/json'},json:async()=>({version:'1.1.0',buildId:'a'.repeat(32),builtAt:'2026-10-27T01:00:00Z'})});
  const member={userId:'member-1',name:'測試人員',email:'member@example.invalid',role,status:'active',unit:role==='unit'?unit:null,version:1};
- const config={registrationOpen:true,dataArea:sharedSchema?'shared':undefined,recordStartDate:'2026-08-01',latestRecordDate:'2026-10-25',units:allLoginUnits.map(u=>({id:u.id,beds:u.beds,type:u.type}))};
+ const config={registrationOpen:true,dataArea:sharedSchema?'shared':undefined,bedCapacityManagement:bedSchema,recordStartDate:'2026-08-01',latestRecordDate:'2026-10-25',units:allLoginUnits.map(u=>({id:u.id,beds:u.beds,type:u.type}))};
+ const bedRows=[...allLoginUnits.map(u=>({unit:u.id,effectiveDate:'2000-01-01',beds:u.beds})),...capacities];let prepared;
  if(updatedSchema)config.applicationUnits=[{id:'護理部',reportUnit:null},...config.units.map(u=>({id:u.id,reportUnit:u.id}))];
  for(const dialog of w.document.querySelectorAll('dialog')){dialog.showModal=()=>dialog.setAttribute('open','');dialog.close=()=>dialog.removeAttribute('open');}
  w.__api={requireApprovalOnlySignup:async()=>{if(!autoConfirm)throw new Error('請管理者將 ENABLE_EMAIL_AUTOCONFIRM 設為 true');},supabase:{auth:{onAuthStateChange(){},async getSession(){return{data:{session:current?{user:{email:member.email,user_metadata:{}}}:null}};},
@@ -41,10 +42,14 @@ async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSche
   if(name==='nrop_public_config')return config;if(name==='nrop_current_account')return current;
   if(name==='nrop_request_access')return current;
   if(name==='nrop_list_records')return records;if(name==='nrop_list_openings')return[];
+  if(name==='nrop_list_bed_capacities')return bedRows;
+  if(name==='nrop_admin_bed_settings')return{today:'2026-10-27',units:config.units.map(u=>({...u,version:1,periods:bedRows.filter(b=>b.unit===u.id)})),history:[]};
+  if(name==='nrop_prepare_bed_change'){prepared=params;return{requestId:'bed-request',unit:params.p_unit,effectiveDate:params.p_date,oldBeds:bedRows.filter(b=>b.unit===params.p_unit&&b.effectiveDate<=params.p_date).at(-1).beds,newBeds:params.p_beds,reason:params.p_reason};}
   if(name==='nrop_admin_accounts')return[{...member,name:'<img src=x onerror="alert(1)">',requestedUnit:'6A'}];
   if(name==='nrop_admin_audit')return[];if(name==='nrop_save_record')return{};
   throw new Error('未預期 RPC '+name);
  }};
+ w.__api.confirmBedChange=async params=>{calls.push({name:'bed.confirm',params});if(params.password==='wrong')throw new Error('Email 或密碼錯誤');bedRows.push({unit:prepared.p_unit,effectiveDate:prepared.p_date,beds:prepared.p_beds});return{};};
  w.eval(await source());await wait(()=>$('#connectionStatus').textContent.includes(sharedSchema?'已連線':'單一資料區'));
  const login=async(password='correct')=>{$('#account').value=member.email;$('#password').value=password;$('#loginForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await wait(()=>!$('#loginForm button[type="submit"]').disabled);};
  const selectUnit=unit=>{const select=$($('#standardEntryGrid').classList.contains('hidden')?'#specialUnitSelect':'#entryUnitSelect');assert.ok(select,'目前卡片必須有單位切換選單');select.value=unit;select.dispatchEvent(new w.Event('change'));};
@@ -54,7 +59,7 @@ test('登入及填報頁共用版本入口，平台使用者更新前可保留�
  const {dom,w,$,login}=await mount();let confirmations=0;
  try{
   await wait(()=>$('#versionStatus').textContent.includes('最新版本'));
-  assert.equal($('#appVersion').textContent,'NROP v1.1.0');assert.equal($('#appVersion').closest('.hidden'),null);
+  assert.equal($('#appVersion').textContent,'NROP-20261027-01');assert.equal($('#appVersion').closest('.hidden'),null);
   await login();await wait(()=>$('#syncStatus').textContent.includes('已從 Supabase'));
   w.fetch=async()=>({ok:true,headers:{get:()=> 'application/json'},json:async()=>({version:'1.2.0',buildId:'b'.repeat(32),builtAt:'2026-10-27T02:00:00Z'})});
   $('#checkVersion').click();await wait(()=>!$('#updateNotice').classList.contains('hidden'));
@@ -63,6 +68,63 @@ test('登入及填報頁共用版本入口，平台使用者更新前可保留�
   assert.equal($('#appVersion').closest('.hidden'),null);
  }finally{dom.window.close();}
 });
+test('系統管理者可查看床數並再次輸入本人帳密，取消或驗證失敗不會儲存',async()=>{
+ const {dom,w,$,calls,login}=await mount('sysadmin');
+ try{
+  await login();await wait(()=>!$('#refreshData').disabled);
+  $('[data-view="beds"]').click();await wait(()=>$('#bedSettingsTable').children.length===28);
+  assert.equal($('#bedSettingsContent').closest('.hidden'),null);assert.ok($('#bedHospitalTotal').textContent.includes('626'));
+  $('[data-edit-bed="7A"]').click();$('#newBeds').value='40';$('#bedEffectiveDate').value='2026-10-28';
+  $('#bedSettingsForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await wait(()=>$('#bedConfirmDialog').open);
+  assert.ok($('#bedConfirmSummary').textContent.includes('45 床 → 40 床'));assert.ok($('#bedConfirmSummary').textContent.includes('N／D／E'));
+  assert.equal($('#bedConfirmAccount').value,'');assert.equal($('#bedConfirmPassword').value,'');
+  $('#cancelBedConfirm').click();assert.equal($('#bedConfirmDialog').open,false);assert.equal(calls.filter(c=>c.name==='bed.confirm').length,0);
+  $('#bedSettingsForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await wait(()=>$('#bedConfirmDialog').open);
+  $('#bedReviewed').checked=true;$('#bedConfirmAccount').value='other@example.invalid';$('#bedConfirmPassword').value='correct';
+  $('#bedConfirmForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+  assert.equal(calls.filter(c=>c.name==='bed.confirm').length,0);assert.equal($('#bedConfirmPassword').value,'');
+  $('#bedConfirmAccount').value='member@example.invalid';$('#bedConfirmPassword').value='wrong';
+  $('#bedConfirmForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await wait(()=>!$('#bedConfirmForm [type="submit"]').disabled);
+  assert.equal($('#bedConfirmDialog').open,true);assert.ok($('#bedConfirmFeedback').textContent.includes('密碼錯誤'));assert.equal($('#bedConfirmPassword').value,'');
+  $('#bedConfirmPassword').value='correct';$('#bedConfirmForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+  await wait(()=>$('#bedSettingsFeedback').textContent.includes('已儲存'));
+  assert.equal($('#bedConfirmDialog').open,false);assert.equal($('#bedConfirmPassword').value,'');
+  assert.equal(calls.filter(c=>c.name==='bed.confirm').length,2);
+ }finally{dom.window.close();}
+});
+
+test('一般使用者及一般管理者無床數管理頁籤，舊資料庫會明確提示升級',async()=>{
+ for(const role of ['unit','admin']){
+  const {dom,w,$,calls,login}=await mount(role);
+  try{
+   await login();await wait(()=>!$('#refreshData').disabled);assert.ok($('[data-view="beds"]').classList.contains('hidden'));
+   $('[data-view="beds"]').click();assert.ok($('#bedsView').classList.contains('hidden'));assert.equal(calls.filter(c=>c.name==='nrop_admin_bed_settings').length,0);
+  }finally{dom.window.close();}
+ }
+ const {dom,$,calls,login}=await mount('sysadmin',{bedSchema:false});
+ try{
+  await login();await wait(()=>!$('#refreshData').disabled);$('[data-view="beds"]').click();
+  assert.ok($('#bedSettingsFeedback').textContent.includes('資料庫更新'));assert.ok($('#bedSettingsContent').classList.contains('hidden'));
+  assert.equal(calls.filter(c=>c.name==='nrop_admin_bed_settings'||c.name==='nrop_list_bed_capacities').length,0);
+ }finally{dom.window.close();}
+});
+
+test('生效日三班及儀表板共用日期母數，歷史日期仍顯示原床數，0 床不產生無限占床率',async()=>{
+ const records=['N','D','E'].flatMap(shift=>[{date:'2026-10-24',shift,unit:'7A',record:{patients:10,status:'submitted',staff:2}},
+ {date:'2026-10-25',shift,unit:'7A',record:{patients:10,status:'submitted',staff:2}}]);
+ const capacities=[{unit:'7A',effectiveDate:'2026-10-25',beds:20},{unit:'7A',effectiveDate:'2026-10-26',beds:0}];
+ const {dom,w,$,login,selectUnit}=await mount('sysadmin',{records,capacities});
+ try{
+  await login();await wait(()=>!$('#refreshData').disabled);selectUnit('7A');
+  for(const [date,expected] of [['2026-10-24','45'],['2026-10-25','20'],['2026-10-26','0']]){
+   $('#entryDate').value=date;$('#entryDate').dispatchEvent(new w.Event('change'));await wait(()=>!$('#refreshData').disabled);
+   for(const shift of ['N','D','E']){$('#entryShift').value=shift;$('#entryShift').dispatchEvent(new w.Event('change'));assert.equal($('#bedCount').textContent,expected);}
+   assert.equal($('#hospitalBeds').textContent,String(626-45+Number(expected)));
+   assert.doesNotMatch($('#unitTable').textContent,/Infinity|NaN/);
+  }
+ }finally{dom.window.close();}
+});
+
 test('登入不可任意密碼，平台使用者無管理頁籤，資料存 Supabase RPC 並含版本',async()=>{
  const {dom,w,$,calls,login}=await mount();
  try{

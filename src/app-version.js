@@ -11,7 +11,8 @@ export function createVersionChecker({ window: win, current, base = '/', enabled
   const checkButton = $('#checkVersion'), reloadButton = $('#reloadVersion');
   const status = $('#versionStatus'), notice = $('#updateNotice');
   const stamp = new Date(current.builtAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
-  $('#appVersion').textContent = `NROP v${current.version}${enabled ? '' : '（本機開發）'}`;
+  const label=release=>/^NROP-\d{8}-(?:0[1-9]|[1-9]\d)$/.test(release.displayVersion)?release.displayVersion:`NROP v${release.version}`;
+  $('#appVersion').textContent = `${label(current)}${enabled ? '' : '（本機開發）'}`;
   $('#appVersion').title = `建置時間：${stamp}（臺灣時間）\n識別碼：${current.buildId.slice(0, 8)}`;
   let latest = null, pending = null, controller = null, timer = null, stopped = false, lastCheck = -Infinity;
   function showRelease(release) {
@@ -19,7 +20,7 @@ export function createVersionChecker({ window: win, current, base = '/', enabled
     notice.classList.toggle('hidden', !latest);
     doc.body.classList.toggle('has-version-update', !!latest);
     if (latest) {
-      $('#updateTitle').textContent = `可更新至 v${latest.version}`;
+      $('#updateTitle').textContent = `可更新至 ${label(latest)}`;
       $('#updateMessage').textContent = '請先暫存填報內容，再重新整理以更新。';
     }
   }

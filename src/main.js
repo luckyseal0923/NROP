@@ -1,9 +1,10 @@
-import { supabase, rpc, errorMessage, requireApprovalOnlySignup } from './api.js';
+import { supabase, rpc, errorMessage, requireApprovalOnlySignup, confirmBedChange } from './api.js';
 import { units, operationalUnits, allLoginUnits } from './catalog.js';
 import { RecordStore, dateOffset, escapeHtml as esc } from './record-store.js';
 import { $, $$, today } from './dom.js';
 import { createReporting } from './report-renderers.js';
 import { createVersionChecker, createEditGuard } from './app-version.js';
+import { createBedManagement } from './bed-management.js';
 
 const roles={unit:'平台使用者',admin:'一般管理者',sysadmin:'系統管理者'};
 const statuses={pending:'待審核',active:'啟用',disabled:'停用'};
@@ -12,16 +13,18 @@ const store=new RecordStore(rpc,new Set(operationalUnits.map(u=>u.id)));
 const reporting=createReporting({store,persistRecord,alertFrom});
 const edits=createEditGuard(document);
 const reportFields='#staff,#openingPatients,.event-input,.special-input';
+const bedManagement=createBedManagement({getSession:()=>session,isEnabled:()=>!!config?.bedCapacityManagement,rpc,confirmChange:confirmBedChange,errorMessage,
+ onBusy:()=>syncControls(),onRendered:()=>edits.capture('beds','#bedSettingsForm input,#bedSettingsForm select'),onSaved:async()=>{await loadConfig();await refreshData();}});
 function renderReporting(){reporting.render(session);edits.capture('report',reportFields);}
 function hasAuthEdits(){
- return ['#loginForm','#registerForm','#joinForm','#passwordForm'].some(selector=>{
+ return ['#loginForm','#registerForm','#joinForm','#passwordForm','#bedConfirmForm'].some(selector=>{
   const form=$(selector),dialog=form.closest('dialog');
   return !form.closest('.hidden,[hidden]')&&(!dialog||dialog.open)&&[...form.querySelectorAll('input')].some(input=>input.value!=='');
  });
 }
 createVersionChecker({window,current:__NROP_RELEASE__,base:import.meta.env.BASE_URL,enabled:import.meta.env.PROD,
  hasUnsavedChanges:()=>edits.hasChanges()||hasAuthEdits(),
- isBusy:()=>busy||loading||$$('#loginForm [type="submit"],#registerForm [type="submit"],#joinForm [type="submit"],#passwordForm [type="submit"],[data-save-account],#registrationOpen').some(button=>button.disabled)
+ isBusy:()=>busy||loading||bedManagement.isBusy()||$$('#loginForm [type="submit"],#registerForm [type="submit"],#joinForm [type="submit"],#passwordForm [type="submit"],[data-save-account],#registrationOpen').some(button=>button.disabled)
 });
 const feedback=(selector,message,error=false)=>{const el=$(selector);el.textContent=message;el.classList.toggle('hidden',!message);el.classList.toggle('error',error);};
 function toast(message){feedback('#toast',message);clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').classList.add('hidden'),4500);}
@@ -32,11 +35,12 @@ function alertFrom(){
  return start>date?date:start;
 }
 function syncControls(){
- const disabled=busy||loading;
+ const disabled=busy||loading||bedManagement.isBusy();
  ['#saveDraft','#submitRecord','#saveSpecialDraft','#submitSpecialRecord','#setOpening',
  '#entryDate','#entryShift','#specialDate','#specialShift','#dashboardDate','#dashboardShift','#refreshData'].forEach(id=>$(id).disabled=disabled);
  $$('[data-unit-picker]').forEach(select=>select.disabled=disabled);
  $$(reportFields).forEach(input=>input.disabled=disabled);
+ $('#logoutBtn').disabled=disabled;
 }
 function renderUnitControls(){
  if(!session)return;
@@ -60,6 +64,7 @@ async function loadConfig(){
  if(!loaded?.units?.length)throw new Error('資料庫尚無單位設定，請執行完整 INSTALL.sql。');
  if(loaded.dataArea!=='shared')throw new Error('資料庫尚未更新為單一資料區，請在 SQL Editor 執行 UPGRADE_005_007.sql 後重新整理。');
  config=loaded;
+ store.capacitiesEnabled=!!config.bedCapacityManagement;
  for(const serverUnit of config.units){const local=allLoginUnits.find(u=>u.id===serverUnit.id);if(local)local.beds=serverUnit.beds;}
  const applicationUnits=config.applicationUnits||[{id:'護理部'},...config.units];
  ['#registerUnit','#joinUnit'].forEach(id=>$(id).innerHTML=applicationUnits.map(u=>`<option value="${esc(u.id)}">${esc(u.id)}</option>`).join(''));
@@ -106,12 +111,14 @@ async function persistRecord(status,payload,special){
 }
 function showView(view){
  if(!session)return;
- if(view==='accounts'&&session.role!=='sysadmin')return;
+ if(['accounts','beds'].includes(view)&&session.role!=='sysadmin')return;
  if(view==='dashboard'&&session.role==='unit')return;
- ['entry','dashboard','accounts'].forEach(name=>$('#'+name+'View').classList.toggle('hidden',view!==name));
+ ['entry','dashboard','accounts','beds'].forEach(name=>$('#'+name+'View').classList.toggle('hidden',view!==name));
  $$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===view));
- $('#pageTitle').textContent={entry:'單位每日填報',dashboard:'全院當日動態',accounts:'帳號管理'}[view];
+ $('#pageTitle').textContent={entry:'單位每日填報',dashboard:'全院當日動態',accounts:'帳號管理',beds:'有效病床數管理'}[view];
+ $('#pageSubtitle').textContent=view==='beds'?'僅系統管理者可調整；生效日三班同用新床數，歷史日期保留原母數。':session.role==='unit'?`${session.unit} 單位資料僅供授權人員填寫`:'依權限管理全院填報資料；異常紀錄顯示所選日期之前最多 30 天';
  if(view==='accounts')void loadAccounts();
+ if(view==='beds')void bedManagement.load();
 }
 async function openApp(member){
  const sameUser=session?.userId===member.userId;
@@ -122,12 +129,14 @@ async function openApp(member){
  $('#pageSubtitle').textContent=member.role==='unit'?`${member.unit} 單位資料僅供授權人員填寫`:'依權限管理全院填報資料；異常紀錄顯示所選日期之前最多 30 天';
  document.querySelector('[data-view="dashboard"]').classList.toggle('hidden',member.role==='unit');
  document.querySelector('[data-view="accounts"]').classList.toggle('hidden',member.role!=='sysadmin');
+ document.querySelector('[data-view="beds"]').classList.toggle('hidden',member.role!=='sysadmin');
  renderUnitControls();
  if(!sameUser)setDates(today());
  showView('entry');await refreshData();
 }
 function clearApp(){
  session=null;store.clear();accountRows=[];edits.reset();$('#accountTable').replaceChildren();$('#auditTable').replaceChildren();
+ bedManagement.clear();
  $('#entryUnitControl').replaceChildren();$('#specialUnitControl').replaceChildren();
  reporting.clear();
  $('#appView').classList.add('hidden');$('#loginView').classList.remove('hidden');$('#sessionArea').hidden=true;

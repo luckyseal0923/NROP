@@ -14,6 +14,26 @@ export async function rpc(name, params = {}) {
   return data;
 }
 
+// 獨立、僅存記憶體的驗證工作階段，避免切換主畫面正在使用的帳號。
+export async function confirmBedChange({requestId,email,password,expectedUserId}) {
+  if(!supabase)throw new Error('尚未設定 Supabase');
+  const confirmation=createClient(url,key,{
+    auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,storageKey:'nrop-bed-confirm-'+crypto.randomUUID()},
+    global:{fetch:(input,init={})=>fetch(input,{...init,signal:init.signal||AbortSignal.timeout(15000)})}
+  });
+  try {
+    const {data,error}=await confirmation.auth.signInWithPassword({email,password});
+    if(error)throw error;
+    if(data.user?.id!==expectedUserId)throw new Error('請輸入目前登入系統管理者本人的帳號密碼');
+    const result=await confirmation.rpc('nrop_confirm_bed_change',{p_request:requestId});
+    if(result.error)throw result.error;
+    return result.data;
+  } finally {
+    // 只登出此次確認用的工作階段；不登出其他分頁或平台。
+    try{await confirmation.auth.signOut({scope:'local'});}catch{}
+  }
+}
+
 // 申請前先確認 Auth 已取消驗證信，避免仍沿用舊設定而寄出使用者不要的信件。
 export async function requireApprovalOnlySignup() {
   const res=await fetch(url.replace(/\/$/,'')+'/auth/v1/settings',{headers:{apikey:key},signal:AbortSignal.timeout(15000)});

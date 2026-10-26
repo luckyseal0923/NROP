@@ -1,6 +1,7 @@
 {
   "name": "nrop-nursing-platform",
   "version": "1.1.0",
+  "nropRelease": "20261027-01",
   "private": true,
   "type": "module",
   "engines": {
@@ -12,7 +13,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test",
     "db:prepare": "node scripts/prepare-sql.mjs",
-    "db:check": "node scripts/check-supabase.mjs"
+    "db:check": "node scripts/check-supabase.mjs",
+    "release:next": "node scripts/next-release.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.99.3"

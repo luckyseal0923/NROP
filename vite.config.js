@@ -4,8 +4,11 @@ import { randomUUID } from 'node:crypto';
 
 export default defineConfig(({ mode, command }) => {
   // 同一次建置的網頁與版本檔使用相同識別碼，重建相同版號也能辨識。
+  const pkg=JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+  if(!/^\d{8}-(?:0[1-9]|[1-9]\d)$/.test(pkg.nropRelease))throw new Error('nropRelease 格式須為 YYYYMMDD-兩碼流水號（01–99）');
   const release = {
-    version: JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version,
+    version: pkg.version,
+    displayVersion: 'NROP-'+pkg.nropRelease,
     buildId: randomUUID().replaceAll('-', ''),
     builtAt: new Date().toISOString()
   };

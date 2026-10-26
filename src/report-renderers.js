@@ -2,6 +2,7 @@ import { units, operationalUnits, allLoginUnits, nursingHomeStaffFields, special
 import { $, $$, today } from './dom.js';
 export function createReporting({store,persistRecord,alertFrom}) {
 let session=null;
+const bedsFor=(unit,date)=>store.bedsAt(unit.id,date,unit.beds);
     function organizeDashboard(){
       const dashboard=$('#dashboardView'),shiftPanel=$('#shiftPanel'),dailyPanel=$('#dailyPanel'),alertsPanel=$('#alertsPanel'),content=[...dashboard.children].slice(5);
       const [dailySummary,shiftLabel,shiftMetrics,closingSummary,unitStats,shiftCharts,alertLog,alertRules]=content;
@@ -40,7 +41,7 @@ function renderEntry(){
   renderCalculationGuide(operational);renderProgress();
   if(operational){renderSpecialForm();return}
   const u=units.find(x=>x.id===session.unit),data=store.get(),rec=data[key($('#entryDate').value,$('#entryShift').value,session.unit)]||emptyRecord(),base=getBase();
-  $('#bedCount').textContent=u.beds;$('#openingControls').classList.toggle('hidden',session.role==='unit'||Object.keys(data).some(k=>k.endsWith('|'+session.unit)));$('#staff').value=rec.staff??'';renderEventFields(rec);$('#previous').value=base.value;
+  $('#bedCount').textContent=bedsFor(u,$('#entryDate').value);$('#openingControls').classList.toggle('hidden',session.role==='unit'||Object.keys(data).some(k=>k.endsWith('|'+session.unit)));$('#staff').value=rec.staff??'';renderEventFields(rec);$('#previous').value=base.value;
   $('#previousNotice').classList.toggle('hidden',base.ready);$('#previousNotice').textContent='前一班尚未正式送出，目前可暫存；前班完成後系統將依最新資料重新計算。';
   setStatus(rec.status);calculate();
 }
@@ -78,7 +79,7 @@ function hasNursingHomeStaffSplit(record){return nursingHomeStaffFields.every(fi
 function nursingHomeStaff(record){return hasNursingHomeStaffSplit(record)?nursingHomeStaffFields.reduce((sum,field)=>sum+Math.round((Number(record[field])||0)*1000),0)/1000:record.staff||0}
 function renderSpecialForm(){
   const u=operationalUnits.find(x=>x.id===session.unit),data=store.get(),rec=data[operationalKey($('#specialDate').value,$('#specialShift').value,u.id)]||{status:'empty'};
-  $('#specialFormTitle').textContent=`${u.id}每日動態填報`;$('#specialBeds').textContent=`${u.beds} 床`;
+  $('#specialFormTitle').textContent=`${u.id}每日動態填報`;$('#specialBeds').textContent=`${bedsFor(u,$('#specialDate').value)} 床`;
   const isNursingHome=u.type==='nursingHome',needsBreakdown=isNursingHome&&!hasNursingHomeStaffSplit(rec)&&(rec.staff||0)>0;
   $('#specialFields').innerHTML=u.fields.map(([field,label])=>{
     const isStaff=specialStaffFields.includes(field),isPart=isNursingHome&&nursingHomeStaffFields.includes(field),isTotal=isNursingHome&&field==='staff',value=isTotal?nursingHomeStaff(rec):rec[field]??(isPart&&needsBreakdown?'':0);
@@ -109,7 +110,7 @@ function values(){
   return v;
 }
 function calculate(){
-  const v=values(),base=getBase().value,beds=units.find(x=>x.id===session.unit).beds,patients=base+v.住院-v.出院+v.轉入-v.轉出-v.死亡,split=admissionFieldsByUnit[session.unit]||[],incomplete=split.some(([field])=>v[field]===null);
+  const v=values(),base=getBase().value,beds=bedsFor(units.find(x=>x.id===session.unit),$('#entryDate').value),patients=base+v.住院-v.出院+v.轉入-v.轉出-v.死亡,split=admissionFieldsByUnit[session.unit]||[],incomplete=split.some(([field])=>v[field]===null);
   $('#patientCount').textContent=patients;$('#emptyBeds').textContent=Math.max(beds-patients,0);$('#overBeds').textContent=Math.max(patients-beds,0);
   $('#admissionSummary').classList.toggle('hidden',!split.length);$('#admissionSummary').textContent=`住院合計：${v.住院} 人次（${incomplete?'暫沿用原紀錄，請補填分類':'兩欄相加，計入當班住院病人數'}）`;
   $('#admissionNotice').classList.toggle('hidden',!incomplete);$('#admissionNotice').textContent=`原紀錄住院合計 ${v.住院} 人次，尚未完成分類。請補填兩欄後再儲存，無此類住院請填 0。`;
@@ -135,7 +136,8 @@ function renderAlerts(data){
       else if(r.status==='draft')alerts.push({date,shift,unit:u.id,type:'未送出',detail:'資料只有暫存，尚未正式送出',level:'draft'});
       const missing=required.filter(f=>r[f]===null||r[f]===undefined||r[f]==='');
       if(missing.length)alerts.push({date,shift,unit:u.id,type:'欄位缺值',detail:`缺少：${missing.map(x=>x==='staff'?'實際上班人力':x).join('、')}`,level:'draft'});
-      if((r.over||0)>0)alerts.push({date,shift,unit:u.id,type:'超床',detail:`超過有效床數 ${r.over} 床`,level:'draft'});
+      const excess=Math.max((r.patients||0)-bedsFor(u,date),0);
+      if(excess>0)alerts.push({date,shift,unit:u.id,type:'超床',detail:`超過有效床數 ${excess} 床`,level:'draft'});
     }));
   }
   const priority={漏填:0,未送出:1,欄位缺值:2,超床:3};alerts.sort((a,b)=>(priority[a.type]-priority[b.type])||b.date.localeCompare(a.date));
@@ -160,23 +162,23 @@ function renderDashboard(){
     if(u.type==='nursingHome'){
       const staffTotal=records.reduce((total,r)=>total+nursingHomeStaff(r),0),needsBreakdown=records.some(r=>(r.staff||0)>0&&!hasNursingHomeStaffSplit(r));
       const staffing=needsBreakdown?`三班上班人力 ${formatStaff(staffTotal)} 人次（護理師／護佐待補分類）`:`三班人力：護理師 ${formatStaff(sum('nurseStaff'))}、護佐 ${formatStaff(sum('aideStaff'))}、合計 ${formatStaff(staffTotal)} 人次`;
-      summary=`住民 ${last.residents||0}、保留床 ${last.reserved||0}、空床 ${Math.max(u.beds-(last.residents||0)-(last.reserved||0),0)}；${staffing}`;
+      summary=`住民 ${last.residents||0}、保留床 ${last.reserved||0}、空床 ${Math.max(bedsFor(u,date)-(last.residents||0)-(last.reserved||0),0)}；${staffing}`;
     }
     if(u.type==='dialysis')summary=`血液透析：門診 ${sum('hemodialysisOutpatient')}、住院 ${sum('hemodialysisInpatient')}、重症 ${sum('hemodialysisCritical')}；腹膜透析 ${sum('peritonealDialysis')}`;
     const state=r=>`<span class="status ${r.status||'empty'}">${r.status==='submitted'?'完成':r.status==='draft'?'暫存':'未填'}</span>`;
     return `<tr><td><b>${u.id}</b></td><td>${summary}</td><td>${state(records[0])}</td><td>${state(records[1])}</td><td>${state(records[2])}</td></tr>`;
   }).join('');
-  const rows=units.map(u=>{const r=data[key(date,shift,u.id)]||emptyRecord(),p=r.patients||0,e=Math.max(u.beds-p,0),o=Math.max(p-u.beds,0),rate=u.beds?Math.round(p/u.beds*100):0;beds+=u.beds;patients+=p;empty+=e;over+=o;staff+=r.staff||0;if(r.status==='submitted')done++;return{u,r,p,e,o,rate}});
+  const rows=units.map(catalogUnit=>{const u={...catalogUnit,beds:bedsFor(catalogUnit,date)},r=data[key(date,shift,u.id)]||emptyRecord(),p=r.patients||0,e=Math.max(u.beds-p,0),o=Math.max(p-u.beds,0),rate=u.beds?Math.round(p/u.beds*100):null;beds+=u.beds;patients+=p;empty+=e;over+=o;staff+=r.staff||0;if(r.status==='submitted')done++;return{u,r,p,e,o,rate}});
   $('#mBeds').textContent=beds;$('#mPatients').textContent=patients;$('#mEmpty').textContent=empty;$('#mOver').textContent=over;$('#mStaff').textContent=formatStaff(staff);$('#mRatio').textContent=formatNursePatientRatio(patients,staff);$('#mProgress').textContent=`${done}/${units.length}`;
-  const hospitalBeds=units.reduce((n,u)=>n+u.beds,0),closingPatients=units.reduce((sum,u)=>sum+(data[key(date,'E',u.id)]?.patients||0),0),nhRecord=data[operationalKey(date,'E','護理之家')],nh={beds:operationalUnits.find(u=>u.id==='護理之家').beds,residents:nhRecord?.residents??null,reserved:nhRecord?.reserved??null};const nhEmpty=Math.max(nh.beds-nh.residents-(nh.reserved||0),0);$('#hospitalBeds').textContent=hospitalBeds;$('#closingPatients').textContent=closingPatients;$('#hospitalEmpty').textContent=Math.max(hospitalBeds-closingPatients,0);$('#nhBeds').textContent=nh.beds;$('#nhResidents').textContent=nh.residents??'—';$('#nhReserved').textContent=nh.reserved??'—';$('#nhEmpty').textContent=nhRecord?nhEmpty:'—';
-  $('#unitTable').innerHTML=rows.map(x=>`<tr><td><b>${x.u.id}</b></td><td class="num">${x.u.beds}</td><td class="num">${x.p}</td><td class="num">${x.e}</td><td class="num">${x.o}</td><td><span class="rate ${x.rate>100?'over':''}"><i style="width:${Math.min(x.rate,100)}%"></i></span>${x.rate}%</td><td class="num">${formatStaff(x.r.staff)}</td><td class="num"><b>${formatNursePatientRatio(x.p,x.r.staff||0)}</b></td><td class="num">${x.r.病危||0}</td><td><span class="status ${x.r.status}">${x.r.status==='submitted'?'完成':x.r.status==='draft'?'暫存':'未填'}</span></td></tr>`).join('');
-  $('#occupancyChart').innerHTML=rows.map(x=>`<div class="bar-col"><b>${x.rate}%</b><div class="bar ${x.rate>100?'over':''}" style="height:${Math.max(Math.min(x.rate,120)/120*150,3)}px"></div><span>${x.u.id}</span></div>`).join('');
+  const hospitalBeds=units.reduce((n,u)=>n+bedsFor(u,date),0),closingPatients=units.reduce((sum,u)=>sum+(data[key(date,'E',u.id)]?.patients||0),0),nhRecord=data[operationalKey(date,'E','護理之家')],nh={beds:bedsFor(operationalUnits.find(u=>u.id==='護理之家'),date),residents:nhRecord?.residents??null,reserved:nhRecord?.reserved??null};const nhEmpty=Math.max(nh.beds-nh.residents-(nh.reserved||0),0);$('#hospitalBeds').textContent=hospitalBeds;$('#closingPatients').textContent=closingPatients;$('#hospitalEmpty').textContent=Math.max(hospitalBeds-closingPatients,0);$('#nhBeds').textContent=nh.beds;$('#nhResidents').textContent=nh.residents??'—';$('#nhReserved').textContent=nh.reserved??'—';$('#nhEmpty').textContent=nhRecord?nhEmpty:'—';
+  $('#unitTable').innerHTML=rows.map(x=>`<tr><td><b>${x.u.id}</b></td><td class="num">${x.u.beds}</td><td class="num">${x.p}</td><td class="num">${x.e}</td><td class="num">${x.o}</td><td><span class="rate ${x.rate>100?'over':''}"><i style="width:${Math.min(x.rate,100)}%"></i></span>${x.rate===null?'—':x.rate+'%'}</td><td class="num">${formatStaff(x.r.staff)}</td><td class="num"><b>${formatNursePatientRatio(x.p,x.r.staff||0)}</b></td><td class="num">${x.r.病危||0}</td><td><span class="status ${x.r.status}">${x.r.status==='submitted'?'完成':x.r.status==='draft'?'暫存':'未填'}</span></td></tr>`).join('');
+  $('#occupancyChart').innerHTML=rows.map(x=>`<div class="bar-col"><b>${x.rate===null?'—':x.rate+'%'}</b><div class="bar ${x.rate>100?'over':''}" style="height:${Math.max(Math.min(x.rate,120)/120*150,3)}px"></div><span>${x.u.id}</span></div>`).join('');
   const pending=rows.filter(x=>x.r.status!=='submitted');$('#pendingList').innerHTML=pending.length?pending.slice(0,10).map(x=>`<div class="side-item"><div><b>${x.u.id}</b><small>${shift} 班資料</small></div><span class="status ${x.r.status}">${x.r.status==='draft'?'已暫存':'尚未填寫'}</span></div>`).join(''):'<div class="empty-state">所有單位皆已完成填報</div>';
   renderAlerts(data);
 }
 $('#exportBtn').onclick=()=>{
   const date=$('#dashboardDate').value,shift=$('#dashboardShift').value,data=store.get(),head=['日期','班別','單位','床數','住院人數','空床數','超床數','上班人力','護病比','病危','狀態','當班住院合計',...admissionExportFields.map(([,label])=>label)].join(',')+'\n';
-  const body=units.map(u=>{const r=data[key(date,shift,u.id)]||emptyRecord(),p=r.patients||0,fields=admissionFieldsByUnit[u.id]||[];return[date,shift,u.id,u.beds,p,Math.max(u.beds-p,0),Math.max(p-u.beds,0),formatStaff(r.staff),formatNursePatientRatio(p,r.staff||0),r.病危||0,r.status,admissionTotal(r,u.id),...admissionExportFields.map(([field])=>fields.some(([name])=>name===field)?r[field]??'':'')].join(',')}).join('\n');
+  const body=units.map(catalogUnit=>{const u={...catalogUnit,beds:bedsFor(catalogUnit,date)},r=data[key(date,shift,u.id)]||emptyRecord(),p=r.patients||0,fields=admissionFieldsByUnit[u.id]||[];return[date,shift,u.id,u.beds,p,Math.max(u.beds-p,0),Math.max(p-u.beds,0),formatStaff(r.staff),formatNursePatientRatio(p,r.staff||0),r.病危||0,r.status,admissionTotal(r,u.id),...admissionExportFields.map(([field])=>fields.some(([name])=>name===field)?r[field]??'':'')].join(',')}).join('\n');
   const blob=new Blob(['\ufeff'+head+body],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`護理動態_${date}_${shift}.csv`;a.click();URL.revokeObjectURL(a.href);
 };
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>t.classList.add('hidden'),2300)}

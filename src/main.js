@@ -6,7 +6,7 @@ import { createReporting } from './report-renderers.js';
 
 const roles={unit:'平台使用者',admin:'一般管理者',sysadmin:'系統管理者'};
 const statuses={pending:'待審核',active:'啟用',disabled:'停用'};
-let session=null, dataset='live', config=null, busy=false, loading=false, authEpoch=0, accountRows=[], passwordRecovery=false;
+let session=null, config=null, busy=false, loading=false, authEpoch=0, accountRows=[], passwordRecovery=false;
 const store=new RecordStore(rpc,new Set(operationalUnits.map(u=>u.id)));
 const reporting=createReporting({store,persistRecord,alertFrom});
 const feedback=(selector,message,error=false)=>{const el=$(selector);el.textContent=message;el.classList.toggle('hidden',!message);el.classList.toggle('error',error);};
@@ -14,17 +14,19 @@ function toast(message){feedback('#toast',message);clearTimeout(window.toastTime
 function setDates(date){['#entryDate','#specialDate','#dashboardDate'].forEach(id=>$(id).value=date);}
 function alertFrom(){
  const date=$('#dashboardDate').value;
- const start=[dateOffset(date,-30),dataset==='demo'?(config?.demoStartDate||date):(config?.liveStartDate||date)].sort().at(-1);
+ const start=[dateOffset(date,-30),config?.recordStartDate||date].sort().at(-1);
  return start>date?date:start;
 }
 function syncControls(){
  const disabled=busy||loading;
- ['#saveDraft','#submitRecord','#saveSpecialDraft','#submitSpecialRecord','#setOpening','#datasetSelect','#managedUnit',
+ ['#saveDraft','#submitRecord','#saveSpecialDraft','#submitSpecialRecord','#setOpening','#managedUnit',
  '#entryDate','#entryShift','#specialDate','#specialShift','#dashboardDate','#dashboardShift','#refreshData'].forEach(id=>$(id).disabled=disabled);
 }
 async function loadConfig(){
- config=await rpc('nrop_public_config');
- if(!config?.units?.length)throw new Error('資料庫尚無單位設定，請執行完整 INSTALL.sql。');
+ const loaded=await rpc('nrop_public_config');
+ if(!loaded?.units?.length)throw new Error('資料庫尚無單位設定，請執行完整 INSTALL.sql。');
+ if(loaded.dataArea!=='shared')throw new Error('資料庫尚未更新為單一資料區，請在 SQL Editor 執行 UPGRADE_005_007.sql 後重新整理。');
+ config=loaded;
  for(const serverUnit of config.units){const local=allLoginUnits.find(u=>u.id===serverUnit.id);if(local)local.beds=serverUnit.beds;}
  const applicationUnits=config.applicationUnits||[{id:'護理部'},...config.units];
  ['#registerUnit','#joinUnit'].forEach(id=>$(id).innerHTML=applicationUnits.map(u=>`<option value="${esc(u.id)}">${esc(u.id)}</option>`).join(''));
@@ -41,8 +43,8 @@ async function refreshData(){
   // 三個日期欄位同步，查詢含前一天基準及最近 30 天異常，無每次載入全部歷史資料。
   const date=$('#dashboardDate').value;
   const from=[alertFrom(),dateOffset(date,-1)].sort()[0];
-  if(!await store.load(dataset,from,date))return false;
-  reporting.render(session,dataset);
+  if(!await store.load(from,date))return false;
+  reporting.render(session);
   showView(view);
   $('#syncStatus').textContent='已從 Supabase 更新 '+new Date().toLocaleTimeString('zh-TW');
   return true;
@@ -60,7 +62,7 @@ async function persistRecord(status,payload,special){
  const date=$(special?'#specialDate':'#entryDate').value,shift=$(special?'#specialShift':'#entryShift').value;
  const key=`${special?'OPS|':''}${date}|${shift}|${session.unit}`,version=store.get()[key]?.version||0;
  try{
-  await rpc('nrop_save_record',{p_dataset:dataset,p_date:date,p_shift:shift,p_unit:session.unit,p_payload:payload,p_status:status,p_version:version});
+  await rpc('nrop_save_record',{p_dataset:'live',p_date:date,p_shift:shift,p_unit:session.unit,p_payload:payload,p_status:status,p_version:version});
   const refreshed=await refreshData();toast(refreshed?(status==='draft'?'已暫存至 Supabase':'已正式送出至 Supabase'):'資料已儲存，但重新讀取失敗，請按重新整理');return true;
  }catch(error){
   feedback('#appError',errorMessage(error),true);
@@ -89,10 +91,9 @@ async function openApp(member){
  document.querySelector('[data-view="accounts"]').classList.toggle('hidden',member.role!=='sysadmin');
  $('#managedUnitField').classList.toggle('hidden',member.role==='unit');$('#managedUnit').value=session.unit;
  $('#currentUnit').textContent=session.unit;
- if(!sameUser){setDates(today());dataset='live';$('#datasetSelect').value='live';}
- updateDatasetNotice();showView('entry');await refreshData();
+ if(!sameUser)setDates(today());
+ showView('entry');await refreshData();
 }
-function updateDatasetNotice(){feedback('#datasetNotice',dataset==='demo'?'DEMO 測試資料：所有數字均為虛擬範例，儲存修改也只影響 DEMO 區，不列入正式營運。':'正式填報：此區僅顯示實際填報紀錄，沒有資料的日期不會自動補示範數字。');}
 function clearApp(){
  session=null;store.clear();accountRows=[];$('#accountTable').replaceChildren();$('#auditTable').replaceChildren();
  reporting.clear();
@@ -174,17 +175,16 @@ $('#passwordForm').onsubmit=e=>{e.preventDefault();void(async()=>{
 })();};
 
 $$('.tab').forEach(t=>t.onclick=()=>showView(t.dataset.view));
-$('#datasetSelect').onchange=async()=>{dataset=$('#datasetSelect').value;store.clear();setDates(dataset==='demo'?(config.demoLatestDate||today()):today());updateDatasetNotice();await refreshData();};
-$('#managedUnit').onchange=()=>{session.unit=$('#managedUnit').value;$('#currentUnit').textContent=session.unit;reporting.render(session,dataset);};
+$('#managedUnit').onchange=()=>{session.unit=$('#managedUnit').value;$('#currentUnit').textContent=session.unit;reporting.render(session);};
 ['#entryDate','#specialDate','#dashboardDate'].forEach(id=>{
  $(id).value=today();$(id).max=today();$(id).onchange=async()=>{if(!$(id).reportValidity()||!$(id).value)return;setDates($(id).value);await refreshData();};
 });
-['#entryShift','#specialShift','#dashboardShift'].forEach(id=>$(id).onchange=()=>reporting.render(session,dataset));
+['#entryShift','#specialShift','#dashboardShift'].forEach(id=>$(id).onchange=()=>reporting.render(session));
 $('#refreshData').onclick=async()=>{await refreshData();if(!$('#appError').textContent)showView(document.querySelector('.tab.active')?.dataset.view||'entry');};
 $('#setOpening').onclick=async()=>{
  if(!$('#openingPatients').reportValidity()||busy||loading)return;
  busy=true;syncControls();
- try{await rpc('nrop_set_opening',{p_dataset:dataset,p_unit:session.unit,p_date:$('#entryDate').value,p_shift:$('#entryShift').value,p_patients:Number($('#openingPatients').value)});await refreshData();toast('期初住院人數已儲存');}
+ try{await rpc('nrop_set_opening',{p_dataset:'live',p_unit:session.unit,p_date:$('#entryDate').value,p_shift:$('#entryShift').value,p_patients:Number($('#openingPatients').value)});await refreshData();toast('期初住院人數已儲存');}
  catch(error){feedback('#appError',errorMessage(error),true);}finally{busy=false;syncControls();}
 };
 

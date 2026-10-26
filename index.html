@@ -15,10 +15,12 @@
   <main id="loginView" class="login-wrap">
     <section class="login-card">
       <div class="login-intro">
-        <img class="intro-art" src="./assets/nrop-hospital-hero.png" width="1086" height="1448" alt="" aria-hidden="true" fetchpriority="high">
-        <div class="intro-copy">
-          <h1>護理即時動態平台</h1>
-          <p>整合班別填報、床位動態與人力統計。</p>
+        <div class="intro-visual">
+          <img class="intro-art" src="./assets/nrop-hospital-hero.png" width="1086" height="1448" alt="" aria-hidden="true" fetchpriority="high">
+          <div class="intro-copy">
+            <h1>護理即時動態平台</h1>
+            <p>整合班別填報、床位動態與人力統計。</p>
+          </div>
         </div>
       </div>
       <div class="login-form">
@@ -44,8 +46,8 @@
   <main id="appView" class="wrap hidden">
     <div class="page-head"><div><h1 id="pageTitle">單位每日填報</h1><p id="pageSubtitle"></p></div><div class="tabs"><button class="tab active" data-view="entry">單位填報</button><button class="tab" data-view="dashboard">管理儀表板</button><button class="tab hidden" data-view="accounts">帳號管理</button></div></div>
 
-    <div class="platform-tools"><label>資料區 <select id="datasetSelect"><option value="live">正式填報</option><option value="demo">DEMO 測試資料</option></select></label><label id="managedUnitField" class="hidden">填報單位 <select id="managedUnit"></select></label><button type="button" class="btn btn-soft" id="refreshData">重新整理</button><span id="syncStatus" role="status"></span></div>
-    <div id="datasetNotice" class="notice"></div><div id="appError" class="notice error hidden" role="alert"></div>
+    <div class="platform-tools"><label id="managedUnitField" class="hidden">填報單位 <select id="managedUnit"></select></label><button type="button" class="btn btn-soft" id="refreshData">重新整理</button><span id="syncStatus" role="status"></span></div>
+    <div id="appError" class="notice error hidden" role="alert"></div>
     <section id="entryView">
       <div id="standardEntryGrid" class="grid-2">
         <article class="card"><div class="card-head"><h2>當班動態資料</h2><span id="recordStatus" class="status empty">尚未填寫</span></div><div class="card-body">
@@ -89,7 +91,7 @@
       <div class="table-wrap"><table><thead><tr><th>姓名／Email</th><th>申請單位</th><th>角色</th><th>核准單位</th><th>狀態</th><th>操作</th></tr></thead><tbody id="accountTable"></tbody></table></div></article>
       <article class="card dashboard-section"><div class="card-head"><h2>最近 100 筆操作紀錄</h2></div><div class="table-wrap"><table><thead><tr><th>時間</th><th>操作</th><th>對象</th><th>操作者</th></tr></thead><tbody id="auditTable"></tbody></table></div></article>
     </section>
-    <div class="footnote">資料儲存於 Supabase · 正式與 DEMO 分區 · 人力可填至小數點第三位</div>
+    <div class="footnote">資料儲存於 Supabase · 人力可填至小數點第三位</div>
   </main>
   <dialog id="accountDialog"><form id="joinForm" class="hidden"><h2>NROP 存取申請</h2><p>此 Email 已登入 Supabase，請申請 NROP 平台權限。</p><div class="field"><label for="joinName">姓名</label><input id="joinName" required maxlength="80"></div><div class="field"><label for="joinUnit">申請單位</label><select id="joinUnit"></select></div><button class="btn btn-primary" type="submit">送出申請</button></form><div id="membershipNotice"></div><button type="button" class="btn btn-soft" id="membershipRefresh">重新檢查核准狀態</button><button type="button" class="btn btn-soft" id="membershipLogout">登出</button></dialog>
   <dialog id="passwordDialog"><form id="passwordForm"><h2>設定新密碼</h2><p>至少 6 碼，包含英文與數字；共用 Supabase 帳號的其他平台也會使用此密碼。</p><div class="field"><label for="newPassword">新密碼</label><input id="newPassword" type="password" autocomplete="new-password" required minlength="6"></div><div class="field"><label for="confirmPassword">再次輸入新密碼</label><input id="confirmPassword" type="password" autocomplete="new-password" required minlength="6"></div><div id="passwordMessage" class="notice hidden" role="status"></div><button class="btn btn-primary" type="submit">更新密碼</button> <button class="btn btn-soft" id="cancelPassword" type="button">取消</button></form></dialog>

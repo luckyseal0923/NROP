@@ -1,7 +1,7 @@
 import { units, operationalUnits, allLoginUnits, nursingHomeStaffFields, specialStaffFields, shifts, events, admissionFieldsByUnit, admissionExportFields } from './catalog.js';
 import { $, $$, today } from './dom.js';
 export function createReporting({store,persistRecord,alertFrom}) {
-let session=null,dataset='live';
+let session=null;
     function organizeDashboard(){
       const dashboard=$('#dashboardView'),shiftPanel=$('#shiftPanel'),dailyPanel=$('#dailyPanel'),alertsPanel=$('#alertsPanel'),content=[...dashboard.children].slice(5);
       const [dailySummary,shiftLabel,shiftMetrics,closingSummary,unitStats,shiftCharts,alertLog,alertRules]=content;
@@ -32,7 +32,7 @@ function getBase(){
   const date=$('#entryDate').value,shift=$('#entryShift').value,data=store.get(),prior=data[previousKey(date,shift,session.unit)];
   const opening=store.openings.find(x=>x.unit_id===session.unit&&x.report_date===date&&x.shift===shift);
   const current=data[key(date,shift,session.unit)];
-  return {value:prior?.patients??opening?.patients??current?.opening??0,ready:prior?.status==='submitted'||!!opening};
+  return {value:prior?.patients??opening?.patients??current?.opening??0,ready:prior?.status==='submitted'||!!opening||(!prior&&!!current?.baselineReady)};
 }
 function renderEntry(){
   const operational=operationalUnits.find(x=>x.id===session.unit);
@@ -147,13 +147,13 @@ function renderDashboard(){
 $('#exportBtn').onclick=()=>{
   const date=$('#dashboardDate').value,shift=$('#dashboardShift').value,data=store.get(),head=['日期','班別','單位','床數','住院人數','空床數','超床數','上班人力','護病比','病危','狀態','當班住院合計',...admissionExportFields.map(([,label])=>label)].join(',')+'\n';
   const body=units.map(u=>{const r=data[key(date,shift,u.id)]||emptyRecord(),p=r.patients||0,fields=admissionFieldsByUnit[u.id]||[];return[date,shift,u.id,u.beds,p,Math.max(u.beds-p,0),Math.max(p-u.beds,0),formatStaff(r.staff),formatNursePatientRatio(p,r.staff||0),r.病危||0,r.status,admissionTotal(r,u.id),...admissionExportFields.map(([field])=>fields.some(([name])=>name===field)?r[field]??'':'')].join(',')}).join('\n');
-  const blob=new Blob(['\ufeff'+head+body],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`護理動態_${dataset}_${date}_${shift}.csv`;a.click();URL.revokeObjectURL(a.href);
+  const blob=new Blob(['\ufeff'+head+body],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`護理動態_${date}_${shift}.csv`;a.click();URL.revokeObjectURL(a.href);
 };
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>t.classList.add('hidden'),2300)}
 
 return {
   getBase,
-  render(member,mode){session=member;dataset=mode;if(!session)return;renderEntry();if(session.role!=='unit')renderDashboard();},
+  render(member){session=member;if(!session)return;renderEntry();if(session.role!=='unit')renderDashboard();},
   clear(){
     session=null;
     ['#unitTable','#occupancyChart','#pendingList','#specialOpsTable','#alertTable','#eventFields','#specialFields','#shiftProgress'].forEach(id=>$(id).replaceChildren());

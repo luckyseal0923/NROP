@@ -4,7 +4,7 @@
 
 ## 1. 先確認新的 Supabase 可用
 
-`.env.local` 的公開主機是 `supabase-test.wfhai.org`。2026-10-26 初次檢查曾回傳 503；使用者修正資料庫名稱並執行 SQL 後，再次檢查 `/auth/v1/settings` 與 `/rest/v1/rpc/nrop_public_config` 均為 HTTP 200，已讀到 28 單位與 DEMO 最後日期。此環境可繼續設定首位管理者；若尚未安裝的新環境，依以下步驟操作。
+`.env.local` 的公開主機是 `supabase-test.wfhai.org`。2026-10-26 初次檢查曾回傳 503；使用者修正資料庫名稱並執行 SQL 後，再次檢查 `/auth/v1/settings` 與 `/rest/v1/rpc/nrop_public_config` 均為 HTTP 200，已讀到 28 單位與 DEMO 最後日期。既有環境的首位管理者已啟用；本次唯讀 API 檢查也確認單一資料區已套用（dataArea=shared）。若是尚未安裝的新環境，依以下步驟操作。
 
 在 Coolify 新的 `supabase-test` 服務進入 General，確認 Database、Auth、REST、Kong、Studio 的狀態。先處理 Degraded 或 Exited 的元件，查看其 Runtime Logs；只提供錯誤片段，避免貼出整份環境變數。Domains 應為 HTTPS、你的測試網域、Kong 內部埠 8000、Path 空白；不需再開放主機的公開 5432 或 8000。
 
@@ -14,16 +14,16 @@
 
 1. 進入這套新 Supabase 的 Studio，選 SQL Editor，新增查詢。
 2. 開啟 `supabase/INSTALL.sql`，Ctrl+A 全選、複製，完整貼上後 Run。
-3. 第一次執行應得到 `dataset=demo`、`record_count=7224`、日期 `2026-08-01`～`2026-10-25`。
-4. 貼上 `supabase/004_verify_install.sql` 驗證：單位 28、DEMO 7224、正式 0、直接讀寫權限 false。未指定首位管理者前 active_system_admins 為 0。
+3. 第一次執行應得到 `record_count=7224`、`sample_count=7224`、日期 `2026-08-01`～`2026-10-25`。
+4. 貼上 `supabase/004_verify_install.sql` 驗證：單位 28、總紀錄 7224、範例來源 7224、舊分區紀錄 0、直接讀寫權限 false。未指定首位管理者前 active_system_admins 為 0。
 
 整份 INSTALL 以單一交易執行，發生錯誤會回滾。若顯示 `schema nrop already exists`，先停止並檢查是否曾安裝，不要刪除 schema 或改成無條件覆蓋。
 
 這份 SQL 不會新增固定密碼、修改其他平台的角色／RLS，也不會新增 Auth 全域 trigger。資料與成員資格在獨立 nrop schema，對外只有 public.nrop_* 的必要入口。無須更動 PostgREST 的 Exposed schemas。
 
-## 已安裝環境追加護理部與管理者審核流程
+## 已安裝環境：整併為單一資料區
 
-已執行舊 INSTALL 的環境，只需完整貼上 `supabase/UPGRADE_005_006.sql` 執行。此檔包含可重跑的 005／006 更新，保留既有成員、28 個填報單位與 DEMO，新增護理部申請選項。護理部申請仍為待審核，不會自行取得管理者權限。
+已執行舊 INSTALL 的環境，先備份並暫停填報，再完整貼上 `supabase/UPGRADE_005_007.sql` 執行。整合護理部、管理者審核與單一資料區，可重跑；保留成員、28 個單位與所有既有數值，衝突時整筆回滾。執行後再更新網站程式。完整操作見 [單一資料區更新指南](單一資料區_更新指南.md)。
 
 ## 3. 設定 Auth 為不寄註冊驗證信
 
@@ -56,17 +56,17 @@ npm run dev
 
 初始化腳本只允許在沒有啟用系統管理者時執行。後續管理者由既有系統管理者授權；最後一位啟用的系統管理者不能停用或降權。系統管理者無法查看別人的密碼，忘記密碼由使用者透過 Email 重設。
 
-## 5. 檢查 DEMO 與正式填報
+## 5. 檢查填報與範例
 
-登入後預設正式區，目前沒有正式資料。切換「資料區 → DEMO 測試資料」即可看 2026-10-25 的範例，也可選更早的日期。DEMO 含原本的未送出、缺人力等異常，舊紀錄未分科／未分人力職類者保留合計，待人工分類。
+登入後沒有資料區切換。選 2026-08-01～2026-10-25 可查看及修改範例，後續新增紀錄使用同一份資料，管理儀表板與匯出一併計算。舊範例未拆住院分類／人力職類者保留原合計，修改時需補齊分類。
 
-正式啟用住院單位時，由一般管理者或系統管理者選定單位、首日與首班，在「期初住院人數」填入已核對的前班人數；即使為 0 也要明確設定。其後 N→D→E 延續計算。一般使用者可暫存；前班未完成時正式送出會先改為暫存。特殊營運單位無須住院期初基準。
+原範例首班已有住院基準，可直接修改。從空白開始的住院單位，仍需管理者設定核對過的首日期初人數，後續依 N→D→E 計算。前班未完成時先暫存；特殊營運單位無須住院期初基準。
 
-建議先用兩個測試帳號驗收：A 屬於 7A、B 屬於 7B。確認 A 無法讀寫 7B；再由系統管理者停用 A，保持 A 原分頁登入狀態後重整／送出，應立即被拒絕。測試資料放在 DEMO 區。舊 localStorage 中的人工資料未自動搬移，先另行備份與核對，避免與範例混入正式區。
+以兩個測試帳號驗收單位權限與停用效果；全部操作使用同一資料區。正式啟用前，先備份並執行 `supabase/008_sample_inventory.sql` 盤點範例及自行新增紀錄，再確認要保留的範圍與首班基準後清除。此盤點 SQL 不刪除資料。舊 localStorage 紀錄仍未自動匯入。
 
 ## 6. 之後才部署 Coolify 網站
 
-目前沒有代為推送或部署。要上線時，先把程式提交到 GitHub，再由你在現有 NROP 應用選 Dockerfile 建置，容器埠 80；兩個公開設定必須提供為 Build Arguments。金鑰名稱沿用 `.env.local` 的 NEXT_PUBLIC_SUPABASE_URL、NEXT_PUBLIC_SUPABASE_ANON_KEY。
+帳號版本已推送 GitHub，本次單一資料區與登入主視覺變更依使用者要求同步 GitHub，實際網站部署另行確認。現有 NROP 若沿用 Railpack，將兩個公開變數設為 Available during build，再 Redeploy。若選用專案提供的 Dockerfile，容器埠為 80，兩個公開設定須提供為 Build Arguments。金鑰名稱沿用 `.env.local` 的 NEXT_PUBLIC_SUPABASE_URL、NEXT_PUBLIC_SUPABASE_ANON_KEY。
 
 `.env.local` 不會進 Git 或 Docker build context。Coolify 不能靠讀取你筆電的檔案取得設定；網頁建置時必須另外填入公開設定，修改後需重建。勿將 service_role、secret key 或資料庫連線密碼放進任何 NEXT_PUBLIC_* / VITE_*。
 

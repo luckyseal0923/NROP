@@ -11,12 +11,12 @@ export class RecordStore {
   constructor(rpc, operationalIds) { this.rpc=rpc; this.operationalIds=operationalIds; this.data={}; this.openings=[]; this.generation=0; }
   get() { return this.data; }
   clear() { this.generation++; this.data={}; this.openings=[]; }
-  async load(dataset, from, to) {
+  async load(from, to) {
     const generation=++this.generation;
     try {
       const [rows,openings]=await Promise.all([
-        this.rpc('nrop_list_records',{p_dataset:dataset,p_from:from,p_to:to}),
-        this.rpc('nrop_list_openings',{p_dataset:dataset})
+        this.rpc('nrop_list_records',{p_dataset:'live',p_from:from,p_to:to}),
+        this.rpc('nrop_list_openings',{p_dataset:'live'})
       ]);
       if(generation!==this.generation) return false;
       this.data=Object.fromEntries(rows.map(row=>[recordKey(row,this.operationalIds),row.record]));

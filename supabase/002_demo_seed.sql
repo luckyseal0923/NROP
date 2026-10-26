@@ -1,4 +1,5 @@
--- 只建立 dataset='demo'，不寫入 live；重跑不覆蓋既有 DEMO。
+-- 範例與填報共用同一資料區；is_sample 僅保留來源，方便正式啟用前清除。
+-- 重跑不覆蓋任何既有紀錄，包括人工填報。
 -- 將原前端 2026-08-01 起的演算法搬到資料庫，固定匯入截至 2026-10-25 的快照。
 begin;
 do $$
@@ -50,8 +51,8 @@ begin
        'hemodialysisCritical',0,'peritonealDialysis',(day_index+si)%5);
      end if;
     end if;
-    insert into nrop.records(dataset,report_date,shift,unit_id,payload,status,opening_patients,patients,updated_at)
-    values('demo',d,s,u.id,body,record_status,case when u.kind in ('ward','special') then before_count else 0 end,
+    insert into nrop.records(dataset,is_sample,report_date,shift,unit_id,payload,status,opening_patients,patients,updated_at)
+    values('live',true,d,s,u.id,body,record_status,case when u.kind in ('ward','special') then before_count else 0 end,
       case when u.kind in ('ward','special') then patients else null end,
       (d::text||' '||case s when 'N' then '07:45' when 'D' then '15:45' else '23:45' end||':00+08')::timestamptz)
     on conflict do nothing;
@@ -60,5 +61,5 @@ begin
  end loop;
 end $$;
 commit;
--- 應有 28 單位 × 86 日 × 3 班 = 7,224 筆 DEMO；正式資料為 0。
-select dataset,count(*) as record_count,min(report_date) as first_date,max(report_date) as last_date from nrop.records group by dataset;
+-- 初次應有 28 單位 × 86 日 × 3 班 = 7,224 筆範例，與後續填報一起查詢。
+select count(*) as record_count,count(*) filter(where is_sample) as sample_count,min(report_date) as first_date,max(report_date) as last_date from nrop.records;

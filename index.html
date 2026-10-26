@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div class="brand"><div class="brand-copy"><div class="brand-title">護理即時動態平台 NROP</div><div class="brand-subtitle">Nursing Real-Time Operations Platform</div></div></div>
-    <div class="top-actions" id="sessionArea" hidden><span class="user-chip" id="userChip"></span><button class="btn btn-ghost" id="logoutBtn">登出</button></div>
+    <div class="top-actions" id="sessionArea" hidden><span class="user-chip" id="userChip"></span><button class="btn btn-ghost" id="changePasswordBtn">變更密碼</button><button class="btn btn-ghost" id="logoutBtn">登出</button></div>
   </header>
 
   <main id="loginView" class="login-wrap">
@@ -21,25 +21,38 @@
           <p>整合班別填報、床位動態與人力統計。</p>
         </div>
       </div>
-      <form class="login-form" id="loginForm"><h2>登入平台</h2><p>請選擇身分與單位進入示範系統</p>
-        <div class="field"><label for="role">登入身分</label><select id="role"><option value="unit">單位填報者</option><option value="admin">護理部管理者</option></select></div>
-        <div class="field" id="unitField"><label for="loginUnit">所屬單位</label><select id="loginUnit"></select></div>
-        <div class="field"><label for="account">帳號</label><input id="account" value="demo" autocomplete="username"></div>
-        <div class="field"><label for="password">密碼</label><input id="password" type="password" value="1234" autocomplete="current-password"></div>
-        <button class="btn btn-primary" type="submit">登入</button><div class="demo-note">這是靜態展示版本，輸入任意帳號與密碼即可登入。資料僅保存在此瀏覽器。</div>
-      </form>
+      <div class="login-form">
+        <div class="subtabs auth-tabs"><button type="button" class="subtab active" data-auth="login">登入</button><button type="button" class="subtab" data-auth="register">申請帳號</button></div>
+        <div id="connectionStatus" class="notice" role="status">正在連接 Supabase…</div>
+        <form id="loginForm"><h2>登入平台</h2><p>使用 Email 與密碼登入，權限依核准的帳號決定。</p>
+          <div class="field"><label for="account">Email 帳號</label><input id="account" type="email" autocomplete="username" required maxlength="254"></div>
+          <div class="field"><label for="password">密碼</label><input id="password" type="password" autocomplete="current-password" required></div>
+          <button class="btn btn-primary" type="submit">登入</button><button class="btn btn-link" id="forgotPassword" type="button">忘記密碼</button>
+        </form>
+        <form id="registerForm" class="hidden"><h2>申請帳號</h2><p>送出後由系統管理者審核，核准前無法使用平台。</p>
+          <div class="field"><label for="registerName">姓名</label><input id="registerName" required maxlength="80" autocomplete="name"></div>
+          <div class="field"><label for="registerUnit">申請單位</label><select id="registerUnit" required></select></div>
+          <div class="field"><label for="registerEmail">Email</label><input id="registerEmail" type="email" required maxlength="254" autocomplete="email"></div>
+          <div class="field"><label for="registerPassword">密碼（至少 6 碼，含英文與數字）</label><input id="registerPassword" type="password" required minlength="6" autocomplete="new-password"></div>
+          <button class="btn btn-primary" type="submit">送出申請</button>
+        </form>
+        <div id="authMessage" class="notice hidden" role="status" aria-live="polite"></div>
+      </div>
     </section>
   </main>
 
   <main id="appView" class="wrap hidden">
-    <div class="page-head"><div><h1 id="pageTitle">單位每日填報</h1><p id="pageSubtitle"></p></div><div class="tabs"><button class="tab active" data-view="entry">單位填報</button><button class="tab" data-view="dashboard">管理儀表板</button></div></div>
+    <div class="page-head"><div><h1 id="pageTitle">單位每日填報</h1><p id="pageSubtitle"></p></div><div class="tabs"><button class="tab active" data-view="entry">單位填報</button><button class="tab" data-view="dashboard">管理儀表板</button><button class="tab hidden" data-view="accounts">帳號管理</button></div></div>
 
+    <div class="platform-tools"><label>資料區 <select id="datasetSelect"><option value="live">正式填報</option><option value="demo">DEMO 測試資料</option></select></label><label id="managedUnitField" class="hidden">填報單位 <select id="managedUnit"></select></label><button type="button" class="btn btn-soft" id="refreshData">重新整理</button><span id="syncStatus" role="status"></span></div>
+    <div id="datasetNotice" class="notice"></div><div id="appError" class="notice error hidden" role="alert"></div>
     <section id="entryView">
       <div id="standardEntryGrid" class="grid-2">
         <article class="card"><div class="card-head"><h2>當班動態資料</h2><span id="recordStatus" class="status empty">尚未填寫</span></div><div class="card-body">
           <div class="form-context"><div class="context-box"><small>填報單位</small><strong id="currentUnit"></strong></div><div class="context-box"><small>日期</small><input type="date" id="entryDate" style="border:0;background:transparent;width:100%;font-weight:700"></div><div class="context-box"><small>班別</small><select id="entryShift" style="border:0;background:transparent;width:100%;font-weight:700"><option value="N">N｜00–08</option><option value="D">D｜08–16</option><option value="E">E｜16–24</option></select></div><div class="context-box"><small>有效床數</small><strong><span id="bedCount">0</span> 床</strong></div></div>
           <div id="previousNotice" class="notice hidden"></div>
-          <div class="input-section"><h3>人力與前班基準</h3><div class="entry-grid"><div class="number-field"><label>實際上班人力 <span class="required">*</span></label><input id="staff" type="number" min="0" step="0.001" inputmode="decimal" value="0"></div><div class="number-field"><label>前一班住院人數</label><input id="previous" type="number" readonly value="0"></div></div></div>
+          <div class="notice hidden" id="openingControls"><p>首次啟用的單位，由管理者確認期初住院人數。</p><label>期初住院人數 <input id="openingPatients" type="number" min="0" step="1" value="0"></label> <button type="button" class="btn btn-soft" id="setOpening">設定期初人數</button></div>
+          <div class="input-section"><h3>人力與前班基準</h3><div class="entry-grid"><div class="number-field"><label>實際上班人力 <span class="required">*</span></label><input id="staff" type="number" min="0" step="0.001" inputmode="decimal" required value="0"></div><div class="number-field"><label>前一班住院人數</label><input id="previous" type="number" readonly value="0"></div></div></div>
           <div class="input-section"><h3>當班異動（非累計）</h3><div id="admissionNotice" class="notice hidden"></div><div class="entry-grid" id="eventFields"></div><div id="admissionSummary" class="formula hidden" style="margin-top:14px"></div></div>
           <div class="input-section"><h3>系統自動計算</h3><div class="calc-strip"><div class="calc"><small>當班住院病人數</small><strong id="patientCount">0</strong></div><div class="calc"><small>空床數</small><strong id="emptyBeds">0</strong></div><div class="calc over"><small>超床數</small><strong id="overBeds">0</strong></div></div></div>
           <div class="actions"><button class="btn btn-soft" id="saveDraft">暫存</button><button class="btn btn-primary" id="submitRecord">正式送出</button></div>
@@ -63,249 +76,25 @@
       <div style="font-weight:800;color:var(--navy);margin:2px 0 12px">所選班別統計</div>
       <div class="summary-grid"><div class="metric"><div class="label">有效床數</div><span class="value" id="mBeds">0</span><span class="unit">床</span></div><div class="metric"><div class="label">住院病人</div><span class="value" id="mPatients">0</span><span class="unit">人</span></div><div class="metric"><div class="label">空床</div><span class="value" id="mEmpty">0</span><span class="unit">床</span></div><div class="metric warning"><div class="label">超床</div><span class="value" id="mOver">0</span><span class="unit">床</span></div><div class="metric"><div class="label">實際上班人力</div><span class="value" id="mStaff">0</span><span class="unit">人</span></div><div class="metric"><div class="label">全院護病比</div><span class="value" id="mRatio">—</span></div><div class="metric"><div class="label">填報進度</div><span class="value" id="mProgress">0/0</span><span class="unit">單位</span></div></div>
       <div class="dashboard-grid" style="margin-bottom:20px">
-        <article class="card"><div class="card-head"><h2>全院住院摘要（當日 E 班）</h2></div><div class="table-wrap"><table><thead><tr><th>全院總病床數</th><th>全院總病人數</th><th>全院總空床數</th></tr></thead><tbody><tr><td class="num"><b id="hospitalBeds">626</b></td><td class="num"><b id="closingPatients">0</b></td><td class="num"><b id="hospitalEmpty">626</b></td></tr></tbody></table></div><div style="padding:10px 20px;color:var(--muted);font-size:12px">總病人數＝一般病房＋特殊單位住院病人數；總空床數＝626－總病人數</div></article>
-        <article class="card"><div class="card-head"><h2>護理之家（獨立統計）</h2></div><div class="table-wrap"><table><thead><tr><th>總病床數</th><th>機構內住民</th><th>保留床位</th><th>實際空床</th></tr></thead><tbody><tr><td class="num" id="nhBeds">39</td><td class="num"><b id="nhResidents">31</b></td><td class="num"><b id="nhReserved">6</b></td><td class="num"><b id="nhEmpty">2</b></td></tr></tbody></table></div></article>
+        <article class="card"><div class="card-head"><h2>全院住院摘要（當日 E 班）</h2></div><div class="table-wrap"><table><thead><tr><th>全院總病床數</th><th>全院總病人數</th><th>全院總空床數</th></tr></thead><tbody><tr><td class="num"><b id="hospitalBeds">626</b></td><td class="num"><b id="closingPatients">0</b></td><td class="num"><b id="hospitalEmpty">626</b></td></tr></tbody></table></div><div style="padding:10px 20px;color:var(--muted);font-size:12px">總病人數＝一般病房＋特殊單位住院病人數；總空床數＝有效病床數－總病人數</div></article>
+        <article class="card"><div class="card-head"><h2>護理之家（獨立統計）</h2></div><div class="table-wrap"><table><thead><tr><th>總病床數</th><th>機構內住民</th><th>保留床位</th><th>實際空床</th></tr></thead><tbody><tr><td class="num" id="nhBeds">39</td><td class="num"><b id="nhResidents">—</b></td><td class="num"><b id="nhReserved">—</b></td><td class="num"><b id="nhEmpty">—</b></td></tr></tbody></table></div></article>
       </div>
       <article class="card"><div class="card-head"><h2>各單位即時統計</h2><button class="btn btn-soft" id="exportBtn">匯出 CSV</button></div><div class="table-wrap"><table><thead><tr><th>單位</th><th>床數</th><th>住院</th><th>空床</th><th>超床</th><th>占床率</th><th>上班人力</th><th>護病比</th><th>病危</th><th>狀態</th></tr></thead><tbody id="unitTable"></tbody></table></div></article>
       <div class="dashboard-grid dashboard-section"><article class="card"><div class="card-head"><h2>各單位占床率</h2></div><div class="card-body"><div class="chart" id="occupancyChart"></div></div></article><article class="card"><div class="card-head"><h2>待完成填報</h2></div><div class="card-body"><div class="side-list" id="pendingList"></div></div></article></div>
       <article class="card dashboard-section"><div class="card-head"><div><h2>異常與漏填紀錄</h2><small style="color:var(--muted)">優先顯示過去未填寫、僅暫存及缺少必要欄位的資料</small></div><span class="status draft" id="alertCount">0 筆待處理</span></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>班別</th><th>單位</th><th>異常類型</th><th>異常內容</th><th>處理狀態</th></tr></thead><tbody id="alertTable"></tbody></table></div></article>
       <article class="card dashboard-section"><div class="card-head"><h2>異常通報判定規則</h2></div><div class="card-body"><div class="formula">漏填異常：過去班別沒有紀錄、只有暫存、實際上班人力或必填事件欄位缺值。營運提醒：住院人數超過有效床數。住院人數與空床數由系統自動計算，不列為人工填報異常；數字 0 是有效資料，也不視為漏填。</div></div></article>
     </section>
-    <div class="footnote">靜態展示版本 · 資料儲存於本機瀏覽器</div>
+    <section id="accountsView" class="hidden">
+      <article class="card"><div class="card-head"><h2>帳號管理</h2><button class="btn btn-soft" id="reloadAccounts">重新整理帳號</button></div><div class="card-body"><label><input id="registrationOpen" type="checkbox"> 開放 NROP 新帳號申請</label><p>新申請預設待審核。停用只影響 NROP 的存取資格。</p><div id="accountFeedback" class="notice hidden" role="status"></div></div>
+      <div class="table-wrap"><table><thead><tr><th>姓名／Email</th><th>申請單位</th><th>角色</th><th>核准單位</th><th>狀態</th><th>操作</th></tr></thead><tbody id="accountTable"></tbody></table></div></article>
+      <article class="card dashboard-section"><div class="card-head"><h2>最近 100 筆操作紀錄</h2></div><div class="table-wrap"><table><thead><tr><th>時間</th><th>操作</th><th>對象</th><th>操作者</th></tr></thead><tbody id="auditTable"></tbody></table></div></article>
+    </section>
+    <div class="footnote">資料儲存於 Supabase · 正式與 DEMO 分區 · 人力可填至小數點第三位</div>
   </main>
+  <dialog id="accountDialog"><form id="joinForm" class="hidden"><h2>NROP 存取申請</h2><p>此 Email 已登入 Supabase，請申請 NROP 平台權限。</p><div class="field"><label for="joinName">姓名</label><input id="joinName" required maxlength="80"></div><div class="field"><label for="joinUnit">申請單位</label><select id="joinUnit"></select></div><button class="btn btn-primary" type="submit">送出申請</button></form><div id="membershipNotice"></div><button type="button" class="btn btn-soft" id="membershipRefresh">重新檢查核准狀態</button><button type="button" class="btn btn-soft" id="membershipLogout">登出</button></dialog>
+  <dialog id="passwordDialog"><form id="passwordForm"><h2>設定新密碼</h2><p>至少 6 碼，包含英文與數字；共用 Supabase 帳號的其他平台也會使用此密碼。</p><div class="field"><label for="newPassword">新密碼</label><input id="newPassword" type="password" autocomplete="new-password" required minlength="6"></div><div class="field"><label for="confirmPassword">再次輸入新密碼</label><input id="confirmPassword" type="password" autocomplete="new-password" required minlength="6"></div><div id="passwordMessage" class="notice hidden" role="status"></div><button class="btn btn-primary" type="submit">更新密碼</button> <button class="btn btn-soft" id="cancelPassword" type="button">取消</button></form></dialog>
   <div id="toast" class="toast hidden"></div>
 
-  <script>
-    const units=[
-      {id:'6A',beds:39,type:'ward'},{id:'6B',beds:43,type:'ward'},{id:'7A',beds:45,type:'ward'},{id:'7B',beds:45,type:'ward'},{id:'8A',beds:32,type:'ward'},{id:'安寧病房',beds:10,type:'ward'},{id:'8B',beds:33,type:'ward'},{id:'9A',beds:45,type:'ward'},{id:'9B',beds:45,type:'ward'},{id:'10A',beds:45,type:'ward'},{id:'10B',beds:45,type:'ward'},{id:'11A',beds:40,type:'ward'},{id:'11B',beds:45,type:'ward'},{id:'12B',beds:10,type:'ward'},{id:'精神科急性病房',beds:30,type:'ward'},
-      {id:'ICU-1',beds:12,type:'special'},{id:'ICU-2',beds:24,type:'special'},{id:'ICU-3',beds:9,type:'special'},{id:'NICU',beds:3,type:'special'},{id:'PICU',beds:2,type:'special'},{id:'BR',beds:10,type:'special'},{id:'NBC',beds:10,type:'special'},{id:'燙傷中心',beds:4,type:'special'}
-    ];
-    const operationalUnits=[
-      {id:'急診',beds:33,type:'emergency',fields:[['staff','實際上班人力'],['visits','來診人數'],['referralIn','轉診入'],['referralOut','轉診出'],['admitted','住院'],['observation','留觀'],['deaths','死亡'],['surgeries','手術']]},
-      {id:'產房',beds:6,type:'delivery',fields:[['staff','實際上班人力'],['visits','來診人數'],['observation','留觀'],['waiting','待產'],['cesarean','剖腹產'],['naturalBirth','自然產'],['drSurgery','DR 手術']]},
-      {id:'手術室',beds:11,type:'operatingRoom',fields:[['staff','實際上班人力'],['inCount','IN'],['outCount','OUT']]},
-      {id:'護理之家',beds:39,type:'nursingHome',fields:[['nurseStaff','護理師'],['aideStaff','護佐'],['staff','上班人力（自動合計）'],['residents','機構內住民人數'],['occupiedBeds','實際使用床數'],['reserved','保留床位'],['admitted','住院'],['discharged','出院']]},
-      {id:'洗腎室',beds:61,type:'dialysis',fields:[['staff','實際上班人力'],['hemodialysisOutpatient','血液透析－門診'],['hemodialysisInpatient','血液透析－住院'],['hemodialysisCritical','血液透析－重症'],['peritonealDialysis','腹膜透析病人數']]}
-    ];
-    const allLoginUnits=[...units,...operationalUnits];
-    const nursingHomeStaffFields=['nurseStaff','aideStaff'],specialStaffFields=['staff',...nursingHomeStaffFields];
-    const shifts=['N','D','E'], events=['住院','出院','轉入','轉出','病危','死亡'];
-    const specialtyAdmissions=[['住院本科','住院（本科）'],['住院非本科','住院（非本科）']],isolationAdmissions=[['住院一般病房','住院（一般病房）'],['住院負壓隔離','住院（負壓隔離）']];
-    const admissionFieldsByUnit={'6A':specialtyAdmissions,'6B':specialtyAdmissions,'12B':isolationAdmissions,'ICU-3':isolationAdmissions};
-    const admissionExportFields=[...specialtyAdmissions,...isolationAdmissions];
-    const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-    const today=()=>{const d=new Date(),off=d.getTimezoneOffset();return new Date(d-off*60000).toISOString().slice(0,10)};
-    const store={get(){return JSON.parse(localStorage.getItem('nursing-daily-records')||'{}')},set(v){localStorage.setItem('nursing-daily-records',JSON.stringify(v))}};
-    let session=null;
-    function organizeDashboard(){
-      const dashboard=$('#dashboardView'),shiftPanel=$('#shiftPanel'),dailyPanel=$('#dailyPanel'),alertsPanel=$('#alertsPanel'),content=[...dashboard.children].slice(5);
-      const [dailySummary,shiftLabel,shiftMetrics,closingSummary,unitStats,shiftCharts,alertLog,alertRules]=content;
-      dailyPanel.prepend(dailySummary,closingSummary);shiftPanel.append(shiftLabel,shiftMetrics,unitStats,shiftCharts);alertsPanel.append(alertLog,alertRules);
-      $$('.subtab').forEach(btn=>btn.onclick=()=>{$$('.subtab').forEach(x=>x.classList.remove('active'));btn.classList.add('active');[shiftPanel,dailyPanel,alertsPanel].forEach(p=>p.classList.toggle('hidden',p.id!==btn.dataset.panel));$('#dashboardShift').classList.toggle('hidden',btn.dataset.panel!=='shiftPanel')});
-    }
-    organizeDashboard();
-    const DEMO_DATA_ENABLED=true; // 正式版改為 false，即停止建立虛擬資料
-    function seedDemoData(){
-      if(!DEMO_DATA_ENABLED)return;
-      const data=store.get(),start=new Date('2026-08-01T12:00:00'),end=new Date(today()+'T12:00:00'),dates=[],demoVersion='realistic-2026-09-v2';let added=false;end.setDate(end.getDate()-1);
-      for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1))dates.push(d.toISOString().slice(0,10));
-      if(localStorage.getItem('nursing-demo-version')!==demoVersion){
-        Object.keys(data).forEach(k=>{const recordDate=k.startsWith('NH|')?k.slice(3):k.slice(0,10);if(recordDate>='2026-08-01'&&recordDate<='2026-09-02')delete data[k]});
-        localStorage.setItem('nursing-demo-version',demoVersion);added=true;
-      }
-      units.forEach((u,ui)=>{
-        let patients=Math.max(1,Math.round(u.beds*(.58+(ui%5)*.025)));
-        dates.forEach((date,dayIndex)=>{
-          shifts.forEach((shift,si)=>{
-            let 入院=(ui+dayIndex+si*2)%9===0?1:0,出院=(ui*2+dayIndex+si)%11===0?1:0,轉入=(ui+dayIndex+si)%17===0?1:0,轉出=(ui*3+dayIndex+si)%19===0?1:0,死亡=(ui+dayIndex*3+si)%127===0?1:0;
-            const minPatients=Math.max(0,Math.floor(u.beds*.48)),maxPatients=Math.max(1,Math.floor(u.beds*.78));
-            let next=patients+入院-出院+轉入-轉出-死亡;
-            if(next<minPatients){出院=0;轉出=0;死亡=0;next=patients+入院+轉入}
-            if(next>maxPatients){入院=0;轉入=0;next=patients-出院-轉出-死亡}
-            patients=next;
-            const 病危=(ui*3+dayIndex+si)%71===0?1:0;
-            const staff=Math.max(1,Math.round(u.beds/(shift==='D'?9:shift==='E'?12:14))+(ui+si)%2);
-            const recordKey=key(date,shift,u.id);if(!data[recordKey]){data[recordKey]={staff,住院:入院,出院,轉入,轉出,病危,死亡,patients,empty:Math.max(u.beds-patients,0),over:Math.max(patients-u.beds,0),status:'submitted',isDemo:true,updatedAt:`${date}T${shift==='N'?'07:45':shift==='D'?'15:45':'23:45'}:00`};added=true}else patients=data[recordKey].patients??patients;
-          });
-        });
-      });
-      operationalUnits.forEach((u,ui)=>dates.forEach((date,dayIndex)=>shifts.forEach((shift,si)=>{
-        const recordKey=operationalKey(date,shift,u.id);if(data[recordKey])return;
-        const r={status:'submitted',isDemo:true,updatedAt:`${date}T${shift==='N'?'07:45':shift==='D'?'15:45':'23:45'}:00`};
-        u.fields.forEach(([field])=>{if(u.type!=='nursingHome'||!nursingHomeStaffFields.includes(field))r[field]=0});
-        r.staff=Math.max(1,Math.round(u.beds/(shift==='D'?10:14)));
-        if(u.type==='emergency'){r.visits=12+((dayIndex*3+si*5)%15);r.referralIn=(dayIndex+si)%7===0?1:0;r.referralOut=(dayIndex+si)%9===0?1:0;r.admitted=2+((dayIndex+si)%4);r.observation=8+((dayIndex*2+si)%9);r.deaths=(dayIndex+si)%43===0?1:0;r.surgeries=(dayIndex+si)%6===0?1:0}
-        if(u.type==='delivery'){r.visits=1+((dayIndex+si)%4);r.observation=(dayIndex+si)%3;r.waiting=(dayIndex*2+si)%3;r.cesarean=(dayIndex+si)%5===0?1:0;r.naturalBirth=(dayIndex+si)%4===0?1:0;r.drSurgery=r.cesarean}
-        if(u.type==='operatingRoom'){r.inCount=shift==='D'?10+(dayIndex%7):shift==='E'?3+(dayIndex%4):(dayIndex%3);r.outCount=r.inCount}
-        if(u.type==='nursingHome'){r.residents=31;r.occupiedBeds=31;r.reserved=6;r.admitted=(dayIndex+si)%29===0?1:0;r.discharged=(dayIndex+si)%31===0?1:0}
-        if(u.type==='dialysis'){r.hemodialysisOutpatient=shift==='D'?25+(dayIndex%8):shift==='E'?16+(dayIndex%7):0;r.hemodialysisInpatient=shift==='D'?3+(dayIndex%3):shift==='E'?1+(dayIndex%2):0;r.peritonealDialysis=(dayIndex+si)%5}
-        data[recordKey]=r;added=true;
-      })));
-      dates.forEach(date=>{const nhKey=`NH|${date}`;if(!data[nhKey]){data[nhKey]={beds:39,residents:31,reserved:6,empty:2,isDemo:true,updatedAt:`${date}T23:45:00`};added=true}else if(data[nhKey].reserved===undefined){data[nhKey].reserved=6;data[nhKey].empty=Math.max(data[nhKey].beds-data[nhKey].residents-6,0);added=true}});
-      if(added)store.set(data);
-    }
-    seedDemoData();
-    function seedDemoAnomalies(){
-      const data=store.get(),samples=[
-        ['2026-08-12','E','8B','draft'],
-        ['2026-08-19','N','ICU-2','missingStaff'],
-        ['2026-09-01','E','9A','empty']
-      ];let changed=false;
-      samples.forEach(([date,shift,unit,kind])=>{const r=data[key(date,shift,unit)];if(!r||!r.isDemo)return;if(kind==='missingStaff'){if(r.staff!==null){r.staff=null;r.status='draft';changed=true}}else if(r.status!==kind){r.status=kind;changed=true}});
-      if(changed)store.set(data);
-    }
-    seedDemoAnomalies();
-    $('#loginUnit').innerHTML=allLoginUnits.map(u=>`<option value="${u.id}">${u.id}</option>`).join('');
-    $('#entryDate').value=$('#specialDate').value=$('#dashboardDate').value=today();
-    $('#role').addEventListener('change',e=>$('#unitField').classList.toggle('hidden',e.target.value==='admin'));
-    $('#loginForm').addEventListener('submit',e=>{e.preventDefault();const role=$('#role').value;session={role,unit:role==='admin'?units[0].id:$('#loginUnit').value,account:$('#account').value||'demo'};openApp()});
-    $('#logoutBtn').onclick=()=>{session=null;$('#appView').classList.add('hidden');$('#loginView').classList.remove('hidden');$('#sessionArea').hidden=true};
-    function openApp(){
-      $('#loginView').classList.add('hidden');$('#appView').classList.remove('hidden');$('#sessionArea').hidden=false;
-      $('#userChip').textContent=session.role==='admin'?'護理部管理者':`${session.unit}｜填報者`;
-      $('#currentUnit').textContent=session.unit;$('#pageSubtitle').textContent=session.role==='admin'?'查看全院當日填報與床位概況':`${session.unit} 單位資料僅供授權人員填寫`;
-      $$('.tab').forEach(t=>{if(session.role!=='admin'&&t.dataset.view==='dashboard')t.classList.add('hidden')});renderEntry();renderDashboard();
-    }
-    $$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');const dash=t.dataset.view==='dashboard';$('#entryView').classList.toggle('hidden',dash);$('#dashboardView').classList.toggle('hidden',!dash);$('#pageTitle').textContent=dash?'全院當日動態':'單位每日填報';if(dash)renderDashboard()});
-    const eventLabels={轉入:'機構內轉入',轉出:'機構內轉出',病危:'病危（不列入計算）'};
-    function entryEventFields(unit){return events.flatMap(n=>n==='住院'&&admissionFieldsByUnit[unit]?admissionFieldsByUnit[unit]:[[n,eventLabels[n]||n]])}
-    function admissionTotal(record,unit){
-      const fields=admissionFieldsByUnit[unit];
-      return fields&&fields.every(([field])=>record[field]!==undefined&&record[field]!==null&&record[field]!=='')?fields.reduce((sum,[field])=>sum+(Number(record[field])||0),0):record.住院||0;
-    }
-    function renderEventFields(record){
-      const split=admissionFieldsByUnit[session.unit]||[],needsBreakdown=(record.住院||0)>0&&split.some(([field])=>record[field]===undefined||record[field]===null||record[field]==='');
-      $('#eventFields').innerHTML=entryEventFields(session.unit).map(([field,label])=>{
-        const isAdmissionPart=split.some(([name])=>name===field),value=record[field]??(isAdmissionPart&&needsBreakdown?'':0);
-        return `<div class="number-field"><label>${label}</label><input class="event-input" data-event="${field}" type="number" min="0" step="1" value="${value}"${isAdmissionPart?' data-admission-part required':''}></div>`;
-      }).join('');
-      $$('.event-input').forEach(input=>input.oninput=calculate);
-    }
-    $('#entryDate').onchange=$('#entryShift').onchange=renderEntry;
-    $('#staff').oninput=calculate;
-    function key(date,shift,unit){return `${date}|${shift}|${unit}`}
-    function previousKey(date,shift,unit){let d=new Date(date+'T12:00:00'),s;if(shift==='N'){d.setDate(d.getDate()-1);s='E'}else{s=shift==='D'?'N':'D'}return key(d.toISOString().slice(0,10),s,unit)}
-    function emptyRecord(){return{staff:0,住院:0,出院:0,轉入:0,轉出:0,病危:0,死亡:0,status:'empty'}}
-    function getBase(){const data=store.get(),pk=previousKey($('#entryDate').value,$('#entryShift').value,session.unit),prior=data[pk];return{value:prior?.patients??0,ready:prior?.status==='submitted'}}
-    function renderEntry(){
-      const operational=operationalUnits.find(x=>x.id===session.unit);
-      $('#standardEntryGrid').classList.toggle('hidden',!!operational);$('#specialEntryView').classList.toggle('hidden',!operational);
-      if(operational){renderSpecialForm();return}
-      const u=units.find(x=>x.id===session.unit),data=store.get(),rec=data[key($('#entryDate').value,$('#entryShift').value,session.unit)]||emptyRecord(),base=getBase();
-      $('#bedCount').textContent=u.beds;$('#staff').value=rec.staff;renderEventFields(rec);$('#previous').value=base.value;
-      $('#previousNotice').classList.toggle('hidden',base.ready);$('#previousNotice').textContent='前一班尚未正式送出，目前可暫存；前班完成後系統將依最新資料重新計算。';
-      setStatus(rec.status);calculate();renderProgress();
-    }
-    function operationalKey(date,shift,unit){return `OPS|${date}|${shift}|${unit}`}
-    function hasNursingHomeStaffSplit(record){return nursingHomeStaffFields.every(field=>record[field]!==undefined&&record[field]!==null&&record[field]!=='')}
-    function nursingHomeStaff(record){return hasNursingHomeStaffSplit(record)?nursingHomeStaffFields.reduce((sum,field)=>sum+Math.round((Number(record[field])||0)*1000),0)/1000:record.staff||0}
-    function renderSpecialForm(){
-      const u=operationalUnits.find(x=>x.id===session.unit),data=store.get(),rec=data[operationalKey($('#specialDate').value,$('#specialShift').value,u.id)]||{status:'empty'};
-      $('#specialFormTitle').textContent=`${u.id}每日動態填報`;$('#specialCurrentUnit').textContent=u.id;$('#specialBeds').textContent=`${u.beds} 床`;
-      const isNursingHome=u.type==='nursingHome',needsBreakdown=isNursingHome&&!hasNursingHomeStaffSplit(rec)&&(rec.staff||0)>0;
-      $('#specialFields').innerHTML=u.fields.map(([field,label])=>{
-        const isStaff=specialStaffFields.includes(field),isPart=isNursingHome&&nursingHomeStaffFields.includes(field),isTotal=isNursingHome&&field==='staff',value=isTotal?nursingHomeStaff(rec):rec[field]??(isPart&&needsBreakdown?'':0);
-        return `<div class="number-field"><label>${label}</label><input class="special-input" data-field="${field}" type="number" min="0" step="${isStaff?'0.001':'1'}" inputmode="${isStaff?'decimal':'numeric'}" value="${value}"${isPart?' data-staff-part required':''}${isTotal?' readonly':''}></div>`;
-      }).join('');
-      $('#staffBreakdownNotice').classList.add('hidden');
-      if(isNursingHome){$$('.special-input[data-staff-part]').forEach(input=>input.oninput=updateNursingHomeStaff);updateNursingHomeStaff()}
-      const el=$('#specialRecordStatus'),text=rec.status==='submitted'?'已完成':rec.status==='draft'?'已暫存':'尚未填寫';el.className=`status ${rec.status||'empty'}`;el.textContent=text;
-    }
-    function updateNursingHomeStaff(){
-      const inputs=$$('.special-input[data-staff-part]'),complete=inputs.every(input=>input.value!==''&&input.validity.valid),record=store.get()[operationalKey($('#specialDate').value,$('#specialShift').value,session.unit)]||{};
-      const parts=Object.fromEntries(inputs.map(input=>[input.dataset.field,Number(input.value)]));
-      $('.special-input[data-field="staff"]').value=formatStaff(complete?nursingHomeStaff(parts):nursingHomeStaff(record));
-      $('#staffBreakdownNotice').classList.toggle('hidden',complete);$('#staffBreakdownNotice').textContent=`請填齊護理師與護佐人力，均可輸入至小數點後三位，無此職類請填 0。分類未完成前保留原紀錄上班人力 ${formatStaff(nursingHomeStaff(record))}，補填後再儲存。`;
-    }
-    $('#specialDate').onchange=$('#specialShift').onchange=renderSpecialForm;
-    function saveSpecial(status){
-      if(!$$('.special-input').filter(input=>specialStaffFields.includes(input.dataset.field)).every(input=>input.reportValidity()))return;
-      const u=operationalUnits.find(x=>x.id===session.unit),data=store.get(),record={status,updatedAt:new Date().toISOString()};
-      $$('.special-input').forEach(input=>record[input.dataset.field]=Math.max(0,(specialStaffFields.includes(input.dataset.field)?parseFloat(input.value):parseInt(input.value))||0));
-      if(u.type==='nursingHome')record.staff=nursingHomeStaff(record);
-      data[operationalKey($('#specialDate').value,$('#specialShift').value,u.id)]=record;store.set(data);renderSpecialForm();renderDashboard();toast(status==='draft'?'資料已暫存':'資料已正式送出');
-    }
-    $('#saveSpecialDraft').onclick=()=>saveSpecial('draft');$('#submitSpecialRecord').onclick=()=>saveSpecial('submitted');
-    function values(){
-      const v={staff:Math.max(0,parseFloat($('#staff').value)||0)},split=admissionFieldsByUnit[session.unit]||[];
-      entryEventFields(session.unit).forEach(([field])=>{const input=document.querySelector(`[data-event="${field}"]`);v[field]=input.value===''&&split.some(([name])=>name===field)?null:Math.max(0,parseInt(input.value)||0)});
-      if(split.length){const record=store.get()[key($('#entryDate').value,$('#entryShift').value,session.unit)]||emptyRecord();v.住院=admissionTotal({...record,...v},session.unit)}
-      return v;
-    }
-    function calculate(){
-      const v=values(),base=getBase().value,beds=units.find(x=>x.id===session.unit).beds,patients=base+v.住院-v.出院+v.轉入-v.轉出-v.死亡,split=admissionFieldsByUnit[session.unit]||[],incomplete=split.some(([field])=>v[field]===null);
-      $('#patientCount').textContent=patients;$('#emptyBeds').textContent=Math.max(beds-patients,0);$('#overBeds').textContent=Math.max(patients-beds,0);
-      $('#admissionSummary').classList.toggle('hidden',!split.length);$('#admissionSummary').textContent=`住院合計：${v.住院} 人次（${incomplete?'暫沿用原紀錄，請補填分類':'兩欄相加，計入當班住院病人數'}）`;
-      $('#admissionNotice').classList.toggle('hidden',!incomplete);$('#admissionNotice').textContent=`原紀錄住院合計 ${v.住院} 人次，尚未完成分類。請補填兩欄後再儲存，無此類住院請填 0。`;
-    }
-    function validateEntry(){return $('#staff').reportValidity()&&$$('.event-input[data-admission-part]').every(input=>input.reportValidity())}
-    function setStatus(s){const el=$('#recordStatus'),map={empty:'尚未填寫',draft:'已暫存',submitted:'已完成'};el.className=`status ${s}`;el.textContent=map[s]}
-    function save(status){
-      if(!validateEntry())return false;
-      const data=store.get(),k=key($('#entryDate').value,$('#entryShift').value,session.unit),v=values(),base=getBase(),beds=units.find(x=>x.id===session.unit).beds,patients=base.value+v.住院-v.出院+v.轉入-v.轉出-v.死亡;
-      data[k]={...v,patients,empty:Math.max(beds-patients,0),over:Math.max(patients-beds,0),status,updatedAt:new Date().toISOString()};
-      for(let pass=0;pass<4;pass++) Object.keys(data).filter(x=>x.endsWith('|'+session.unit)).sort().forEach(recordKey=>{const [date,shift,unit]=recordKey.split('|'),prior=data[previousKey(date,shift,unit)];if(!prior)return;const r=data[recordKey],b=units.find(x=>x.id===unit).beds,p=prior.patients+admissionTotal(r,unit)-(r.出院||0)+(r.轉入||0)-(r.轉出||0)-(r.死亡||0);r.住院=admissionTotal(r,unit);r.patients=p;r.empty=Math.max(b-p,0);r.over=Math.max(p-b,0)});
-      store.set(data);setStatus(status);renderProgress();renderDashboard();toast(status==='draft'?'資料已暫存':'資料已正式送出');return true;
-    }
-    $('#saveDraft').onclick=()=>save('draft');$('#submitRecord').onclick=()=>{if(!getBase().ready){if(save('draft'))toast('前一班尚未完成，資料已先暫存')}else save('submitted')};
-    function renderProgress(){const data=store.get(),date=$('#entryDate').value;$('#shiftProgress').innerHTML=shifts.map(s=>{const r=data[key(date,s,session.unit)]||emptyRecord(),txt=r.status==='submitted'?'已完成':r.status==='draft'?'已暫存':'待填報';return `<div class="side-item"><div><b>${s} 班</b><small>${s==='N'?'00:00–08:00':s==='D'?'08:00–16:00':'16:00–24:00'}</small></div><span class="status ${r.status}">${txt}</span></div>`}).join('')}
-    $('#dashboardDate').onchange=$('#dashboardShift').onchange=renderDashboard;
-    function renderAlerts(data){
-      const alerts=[],required=['staff','住院','出院','轉入','轉出','病危','死亡'],start=new Date('2026-08-01T12:00:00'),end=new Date(today()+'T12:00:00');end.setDate(end.getDate()-1);
-      for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
-        const date=d.toISOString().slice(0,10);
-        units.forEach(u=>shifts.forEach(shift=>{
-          const recordKey=key(date,shift,u.id),r=data[recordKey];
-          if(!r){alerts.push({date,shift,unit:u.id,type:'漏填',detail:'此班別沒有填報紀錄',level:'empty'});return}
-          if(r.status==='empty')alerts.push({date,shift,unit:u.id,type:'漏填',detail:'此班別尚未填寫',level:'empty'});
-          else if(r.status==='draft')alerts.push({date,shift,unit:u.id,type:'未送出',detail:'資料只有暫存，尚未正式送出',level:'draft'});
-          const missing=required.filter(f=>r[f]===null||r[f]===undefined||r[f]==='');
-          if(missing.length)alerts.push({date,shift,unit:u.id,type:'欄位缺值',detail:`缺少：${missing.map(x=>x==='staff'?'實際上班人力':x).join('、')}`,level:'draft'});
-          if((r.over||0)>0)alerts.push({date,shift,unit:u.id,type:'超床',detail:`超過有效床數 ${r.over} 床`,level:'draft'});
-        }));
-      }
-      const priority={漏填:0,未送出:1,欄位缺值:2,超床:3};alerts.sort((a,b)=>(priority[a.type]-priority[b.type])||b.date.localeCompare(a.date));
-      $('#alertCount').textContent=`${alerts.length} 筆待處理`;
-      $('#alertTable').innerHTML=alerts.length?alerts.slice(0,100).map(a=>`<tr><td>${a.date}</td><td>${a.shift}</td><td><b>${a.unit}</b></td><td><span class="status ${a.level}">${a.type}</span></td><td>${a.detail}</td><td>待確認</td></tr>`).join(''):'<tr><td colspan="6"><div class="empty-state">目前沒有異常或漏填紀錄</div></td></tr>';
-    }
-    function formatStaff(value){return String(Number((value||0).toFixed(3)))}
-    function formatNursePatientRatio(patientCount,staffCount){return staffCount>0?`1：${(patientCount/staffCount).toFixed(1).replace(/\.0$/,'')}`:'—'}
-    function renderDashboard(){
-      const date=$('#dashboardDate').value,shift=$('#dashboardShift').value,data=store.get();let beds=0,patients=0,empty=0,over=0,staff=0,done=0;
-      const daily={住院:0,出院:0,轉入:0,轉出:0,病危:0,死亡:0,staff:0,completed:0,closing:0};
-      units.forEach(u=>shifts.forEach(s=>{const r=data[key(date,s,u.id)];if(!r)return;daily.住院+=admissionTotal(r,u.id);daily.出院+=r.出院||0;daily.轉入+=r.轉入||0;daily.轉出+=r.轉出||0;daily.病危+=r.病危||0;daily.死亡+=r.死亡||0;daily.staff+=r.staff||0;if(r.status==='submitted')daily.completed++;if(s==='E')daily.closing+=r.patients||0}));
-      operationalUnits.forEach(u=>shifts.forEach(s=>{const r=data[operationalKey(date,s,u.id)];if(!r)return;daily.staff+=u.type==='nursingHome'?nursingHomeStaff(r):r.staff||0;if(r.status==='submitted')daily.completed++}));
-      $('#dClosing').textContent=daily.closing;$('#dAdmissions').textContent=daily.住院;$('#dDischarges').textContent=daily.出院;$('#dTransfers').textContent=`${daily.轉入}／${daily.轉出}`;$('#dCriticalDeaths').textContent=`${daily.病危}／${daily.死亡}`;$('#dStaff').textContent=formatStaff(daily.staff);
-      const dailyStatus=$('#dailyStatus'),allShiftRecords=allLoginUnits.length*shifts.length;dailyStatus.textContent=`${daily.completed}/${allShiftRecords} 班完成`;dailyStatus.className=`status ${daily.completed===allShiftRecords?'done':'draft'}`;
-      $('#specialOpsTable').innerHTML=operationalUnits.map(u=>{
-        const records=shifts.map(s=>data[operationalKey(date,s,u.id)]||{status:'empty'}),sum=f=>records.reduce((n,r)=>n+(r[f]||0),0),last=records[2];
-        let summary='';
-        if(u.type==='emergency')summary=`來診 ${sum('visits')}、住院 ${sum('admitted')}、E班留觀 ${last.observation||0}`;
-        if(u.type==='delivery')summary=`來診 ${sum('visits')}、自然產 ${sum('naturalBirth')}、剖腹產 ${sum('cesarean')}`;
-        if(u.type==='operatingRoom')summary=`IN ${sum('inCount')}、OUT ${sum('outCount')}`;
-        if(u.type==='nursingHome'){
-          const staffTotal=records.reduce((total,r)=>total+nursingHomeStaff(r),0),needsBreakdown=records.some(r=>(r.staff||0)>0&&!hasNursingHomeStaffSplit(r));
-          const staffing=needsBreakdown?`三班上班人力 ${formatStaff(staffTotal)} 人次（護理師／護佐待補分類）`:`三班人力：護理師 ${formatStaff(sum('nurseStaff'))}、護佐 ${formatStaff(sum('aideStaff'))}、合計 ${formatStaff(staffTotal)} 人次`;
-          summary=`住民 ${last.residents||0}、保留床 ${last.reserved||0}、空床 ${Math.max(u.beds-(last.residents||0)-(last.reserved||0),0)}；${staffing}`;
-        }
-        if(u.type==='dialysis')summary=`血液透析：門診 ${sum('hemodialysisOutpatient')}、住院 ${sum('hemodialysisInpatient')}、重症 ${sum('hemodialysisCritical')}；腹膜透析 ${sum('peritonealDialysis')}`;
-        const state=r=>`<span class="status ${r.status||'empty'}">${r.status==='submitted'?'完成':r.status==='draft'?'暫存':'未填'}</span>`;
-        return `<tr><td><b>${u.id}</b></td><td>${summary}</td><td>${state(records[0])}</td><td>${state(records[1])}</td><td>${state(records[2])}</td></tr>`;
-      }).join('');
-      const rows=units.map(u=>{const r=data[key(date,shift,u.id)]||emptyRecord(),p=r.patients||0,e=Math.max(u.beds-p,0),o=Math.max(p-u.beds,0),rate=u.beds?Math.round(p/u.beds*100):0;beds+=u.beds;patients+=p;empty+=e;over+=o;staff+=r.staff||0;if(r.status==='submitted')done++;return{u,r,p,e,o,rate}});
-      $('#mBeds').textContent=beds;$('#mPatients').textContent=patients;$('#mEmpty').textContent=empty;$('#mOver').textContent=over;$('#mStaff').textContent=formatStaff(staff);$('#mRatio').textContent=formatNursePatientRatio(patients,staff);$('#mProgress').textContent=`${done}/${units.length}`;
-      const hospitalBeds=626,closingPatients=units.reduce((sum,u)=>sum+(data[key(date,'E',u.id)]?.patients||0),0),nh=data[`NH|${date}`]||{beds:39,residents:31,reserved:6};const nhEmpty=Math.max(nh.beds-nh.residents-(nh.reserved||0),0);$('#hospitalBeds').textContent=hospitalBeds;$('#closingPatients').textContent=closingPatients;$('#hospitalEmpty').textContent=Math.max(hospitalBeds-closingPatients,0);$('#nhBeds').textContent=nh.beds;$('#nhResidents').textContent=nh.residents;$('#nhReserved').textContent=nh.reserved||0;$('#nhEmpty').textContent=nhEmpty;
-      $('#unitTable').innerHTML=rows.map(x=>`<tr><td><b>${x.u.id}</b></td><td class="num">${x.u.beds}</td><td class="num">${x.p}</td><td class="num">${x.e}</td><td class="num">${x.o}</td><td><span class="rate ${x.rate>100?'over':''}"><i style="width:${Math.min(x.rate,100)}%"></i></span>${x.rate}%</td><td class="num">${formatStaff(x.r.staff)}</td><td class="num"><b>${formatNursePatientRatio(x.p,x.r.staff||0)}</b></td><td class="num">${x.r.病危||0}</td><td><span class="status ${x.r.status}">${x.r.status==='submitted'?'完成':x.r.status==='draft'?'暫存':'未填'}</span></td></tr>`).join('');
-      $('#occupancyChart').innerHTML=rows.map(x=>`<div class="bar-col"><b>${x.rate}%</b><div class="bar ${x.rate>100?'over':''}" style="height:${Math.max(Math.min(x.rate,120)/120*150,3)}px"></div><span>${x.u.id}</span></div>`).join('');
-      const pending=rows.filter(x=>x.r.status!=='submitted');$('#pendingList').innerHTML=pending.length?pending.slice(0,10).map(x=>`<div class="side-item"><div><b>${x.u.id}</b><small>${shift} 班資料</small></div><span class="status ${x.r.status}">${x.r.status==='draft'?'已暫存':'尚未填寫'}</span></div>`).join(''):'<div class="empty-state">所有單位皆已完成填報</div>';
-      renderAlerts(data);
-    }
-    $('#exportBtn').onclick=()=>{
-      const date=$('#dashboardDate').value,shift=$('#dashboardShift').value,data=store.get(),head=['日期','班別','單位','床數','住院人數','空床數','超床數','上班人力','護病比','病危','狀態','當班住院合計',...admissionExportFields.map(([,label])=>label)].join(',')+'\n';
-      const body=units.map(u=>{const r=data[key(date,shift,u.id)]||emptyRecord(),p=r.patients||0,fields=admissionFieldsByUnit[u.id]||[];return[date,shift,u.id,u.beds,p,Math.max(u.beds-p,0),Math.max(p-u.beds,0),formatStaff(r.staff),formatNursePatientRatio(p,r.staff||0),r.病危||0,r.status,admissionTotal(r,u.id),...admissionExportFields.map(([field])=>fields.some(([name])=>name===field)?r[field]??'':'')].join(',')}).join('\n');
-      const blob=new Blob(['\ufeff'+head+body],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`護理動態_${date}_${shift}.csv`;a.click();URL.revokeObjectURL(a.href);
-    };
-    function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>t.classList.add('hidden'),2300)}
-  </script>
+  <script type="module" src="/src/main.js"></script>
 </body>
 </html>

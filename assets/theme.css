@@ -62,6 +62,27 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
 .login-form .btn { width: 100%; padding: 13px; }
 .demo-note { font-size: 13px; line-height: 1.7; color: var(--muted); background: var(--surface-wash); padding: 12px 14px; border: 1px solid #e5ecef; border-radius: 10px; margin-top: 16px; }
 
+/* Supabase authentication and account management */
+button:disabled { opacity: .55; cursor: wait; transform: none; }
+.btn-link { background: transparent; color: #075a9d; box-shadow: none; }
+.auth-tabs { margin-bottom: 20px; }
+.login-form form > p { color: var(--muted); line-height: 1.7; }
+.notice.error { color: #8c2020; background: #fff2f2; border-color: #e6b5b5; }
+.platform-tools { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 16px; }
+.platform-tools label { font-weight: 700; }
+.platform-tools select, #accountTable select, #openingPatients { font: inherit; padding: 9px; border: 1px solid var(--input-line); border-radius: 8px; background: #fff; max-width: 100%; }
+#syncStatus { color: var(--muted); font-size: 13px; }
+#accountTable td { vertical-align: middle; }
+#accountTable select { min-width: 100px; }
+dialog { width: min(480px, calc(100vw - 32px)); border: 1px solid var(--line); padding: 28px; border-radius: 18px; color: var(--text); box-shadow: 0 24px 80px #001b4455; }
+dialog::backdrop { background: #001b44aa; }
+dialog h2 { color: var(--navy); margin-top: 0; }
+dialog p { line-height: 1.7; }
+#openingPatients { width: 110px; }
+#openingControls p { margin-top: 0; }
+#membershipNotice { line-height: 1.8; margin-bottom: 18px; }
+@media (max-width: 700px) { .top-actions { flex-wrap: wrap; justify-content: flex-end; gap: 7px; } .top-actions .btn { padding: 7px; font-size: 12px; } .user-chip { font-size: 12px; } .platform-tools { align-items: stretch; } }
+
 /* Pages, cards and forms */
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
 .page-head h1 { font-size: 27px; margin: 0 0 6px; color: var(--navy); }

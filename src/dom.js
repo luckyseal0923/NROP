@@ -1,0 +1,3 @@
+export const $=s=>document.querySelector(s);
+export const $$=s=>[...document.querySelectorAll(s)];
+export function today() {return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}

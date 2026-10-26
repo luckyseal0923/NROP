@@ -25,10 +25,10 @@ async function source(){
  return bundled;
 }
 const wait=async(condition)=>{for(let i=0;i<100;i++){if(condition())return;await new Promise(r=>setTimeout(r,5));}throw new Error('UI 等候逾時');};
-async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSchema=true,records=[]}={}){
+async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSchema=true,records=[],unit='7A'}={}){
  const dom=new JSDOM(readFileSync('index.html','utf8'),{url:'https://nrop.example.invalid',runScripts:'outside-only'}),w=dom.window,$=s=>w.document.querySelector(s);
  const calls=[];let current=null;let offline=false;
- const member={userId:'member-1',name:'測試人員',email:'member@example.invalid',role,status:'active',unit:role==='unit'?'7A':null,version:1};
+ const member={userId:'member-1',name:'測試人員',email:'member@example.invalid',role,status:'active',unit:role==='unit'?unit:null,version:1};
  const config={registrationOpen:true,dataArea:sharedSchema?'shared':undefined,recordStartDate:'2026-08-01',latestRecordDate:'2026-10-25',units:allLoginUnits.map(u=>({id:u.id,beds:u.beds,type:u.type}))};
  if(updatedSchema)config.applicationUnits=[{id:'護理部',reportUnit:null},...config.units.map(u=>({id:u.id,reportUnit:u.id}))];
  for(const dialog of w.document.querySelectorAll('dialog')){dialog.showModal=()=>dialog.setAttribute('open','');dialog.close=()=>dialog.removeAttribute('open');}
@@ -54,10 +54,58 @@ test('登入不可任意密碼，平台使用者無管理頁籤，資料存 Supa
   await login('wrong');assert.ok($('#appView').classList.contains('hidden'));
   await login();await wait(()=>$('#syncStatus').textContent.includes('已從 Supabase'));
   assert.equal($('#userChip').textContent,'測試人員｜平台使用者｜7A');assert.ok($('[data-view="accounts"]').classList.contains('hidden'));
+  assert.equal($('#calculationGuide').closest('.hidden'),null);assert.ok($('#calculationRules').textContent.includes('前班住院人數'));
   $('#staff').value='1.234';$('#saveDraft').click();await wait(()=>calls.some(c=>c.name==='nrop_save_record'));
   const saved=calls.find(c=>c.name==='nrop_save_record').params;assert.equal(saved.p_unit,'7A');assert.equal(saved.p_payload.staff,1.234);assert.equal(saved.p_version,0);assert.equal(saved.p_dataset,'live');
   await wait(()=>!$('#saveDraft').disabled);
   assert.equal(w.localStorage.getItem('nursing-daily-records'),null);
+ }finally{dom.window.close();}
+});
+
+test('急診平台使用者可查看計算說明與所選日期的三班進度',async()=>{
+ const records=[{date:'2026-10-25',shift:'N',unit:'急診',record:{status:'submitted',staff:2}},
+  {date:'2026-10-25',shift:'D',unit:'急診',record:{status:'draft',staff:1}}];
+ const {dom,w,$,login}=await mount('unit',{unit:'急診',records});
+ try{
+  await login();await wait(()=>$('#syncStatus').textContent.includes('已從 Supabase'));
+  assert.equal($('#calculationGuide').closest('.hidden'),null);
+  assert.ok($('#standardEntryGrid').classList.contains('hidden'));assert.ok(!$('#specialEntryView').classList.contains('hidden'));
+  assert.ok($('#calculationRules').textContent.includes('E 班留觀人數'));
+  assert.equal(w.document.querySelectorAll('#calculationGuide').length,1);
+  $('#specialDate').value='2026-10-25';$('#specialDate').dispatchEvent(new w.Event('change'));
+  await wait(()=>!$('#refreshData').disabled);
+  assert.deepEqual([...w.document.querySelectorAll('#shiftProgress .status')].map(el=>el.textContent),['已完成','已暫存','待填報']);
+  $('#specialDate').value='2026-10-24';$('#specialDate').dispatchEvent(new w.Event('change'));
+  await wait(()=>!$('#refreshData').disabled);
+  assert.deepEqual([...w.document.querySelectorAll('#shiftProgress .status')].map(el=>el.textContent),['待填報','待填報','待填報']);
+  assert.ok($('[data-view="dashboard"]').classList.contains('hidden'));assert.ok($('[data-view="accounts"]').classList.contains('hidden'));
+ }finally{dom.window.close();}
+});
+
+test('各特殊單位的平台使用者都有對應說明與三班進度',async()=>{
+ const cases=[['產房','全日來診、自然產及剖腹產'],['手術室','全日 IN'],['護理之家','上班人力 ＝ 護理師 ＋ 護佐'],['洗腎室','門診、住院、重症三欄']];
+ for(const [unit,expected] of cases){
+  const {dom,w,$,login}=await mount('unit',{unit});
+  try{
+   await login();await wait(()=>$('#syncStatus').textContent.includes('已從 Supabase'));
+   assert.equal($('#calculationGuide').closest('.hidden'),null);assert.ok($('#calculationRules').textContent.includes(expected));
+   assert.equal(w.document.querySelectorAll('#shiftProgress .side-item').length,3);
+   assert.ok($('#managedUnitField').classList.contains('hidden'));
+  }finally{dom.window.close();}
+ }
+});
+
+test('管理者切換病房及特殊單位時，共用說明與進度不殘留前單位內容',async()=>{
+ const {dom,w,$,login}=await mount('admin');
+ try{
+  await login();await wait(()=>$('#syncStatus').textContent.includes('已從 Supabase'));
+  const select=unit=>{$('#managedUnit').value=unit;$('#managedUnit').dispatchEvent(new w.Event('change'));};
+  select('6A');assert.ok($('#calculationRules').textContent.includes('住院（本科） ＋ 住院（非本科）'));
+  select('ICU-3');assert.ok($('#calculationRules').textContent.includes('住院（一般病房） ＋ 住院（負壓隔離）'));
+  select('急診');assert.ok($('#calculationRules').textContent.includes('E 班留觀人數'));assert.ok(!$('#calculationRules').textContent.includes('住院（本科）'));
+  select('護理之家');assert.ok($('#calculationRules').textContent.includes('上班人力 ＝ 護理師 ＋ 護佐'));
+  select('7A');assert.ok($('#calculationRules').textContent.includes('前班住院人數'));assert.ok(!$('#calculationRules').textContent.includes('護佐'));
+  assert.equal(w.document.querySelectorAll('#shiftProgress').length,1);
  }finally{dom.window.close();}
 });
 test('一般管理者選護理之家與洗腎重症，合計與小數欄位維持原需求',async()=>{

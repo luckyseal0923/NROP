@@ -49,7 +49,9 @@
     <div class="platform-tools"><label id="managedUnitField" class="hidden">填報單位 <select id="managedUnit"></select></label><button type="button" class="btn btn-soft" id="refreshData">重新整理</button><span id="syncStatus" role="status"></span></div>
     <div id="appError" class="notice error hidden" role="alert"></div>
     <section id="entryView">
-      <div id="standardEntryGrid" class="grid-2">
+      <div class="grid-2" id="entryLayout">
+      <div class="entry-forms">
+      <div id="standardEntryGrid">
         <article class="card"><div class="card-head"><h2>當班動態資料</h2><span id="recordStatus" class="status empty">尚未填寫</span></div><div class="card-body">
           <div class="form-context"><div class="context-box"><small>填報單位</small><strong id="currentUnit"></strong></div><div class="context-box"><small>日期</small><input type="date" id="entryDate" style="border:0;background:transparent;width:100%;font-weight:700"></div><div class="context-box"><small>班別</small><select id="entryShift" style="border:0;background:transparent;width:100%;font-weight:700"><option value="N">N｜00–08</option><option value="D">D｜08–16</option><option value="E">E｜16–24</option></select></div><div class="context-box"><small>有效床數</small><strong><span id="bedCount">0</span> 床</strong></div></div>
           <div id="previousNotice" class="notice hidden"></div>
@@ -59,7 +61,6 @@
           <div class="input-section"><h3>系統自動計算</h3><div class="calc-strip"><div class="calc"><small>當班住院病人數</small><strong id="patientCount">0</strong></div><div class="calc"><small>空床數</small><strong id="emptyBeds">0</strong></div><div class="calc over"><small>超床數</small><strong id="overBeds">0</strong></div></div></div>
           <div class="actions"><button class="btn btn-soft" id="saveDraft">暫存</button><button class="btn btn-primary" id="submitRecord">正式送出</button></div>
         </div></article>
-        <aside class="card"><div class="card-head"><h2>計算說明</h2></div><div class="card-body"><div class="formula">住院人數 ＝ 前班住院人數 ＋ 住院 − 出院 ＋ 機構內轉入 − 機構內轉出 − 死亡<br><br>病危僅作狀態註記，不列入計算，也不影響住院或空床數。</div><h3 style="font-size:15px;margin:22px 0 12px">今日班別進度</h3><div class="side-list" id="shiftProgress"></div></div></aside>
       </div>
       <div id="specialEntryView" class="hidden">
         <article class="card"><div class="card-head"><div><h2 id="specialFormTitle">特殊單位填報</h2><small style="color:var(--muted)">本區除合計外均為人工輸入</small></div><span id="specialRecordStatus" class="status empty">尚未填寫</span></div><div class="card-body">
@@ -67,6 +68,9 @@
           <div class="input-section"><h3>當班填報內容</h3><div id="staffBreakdownNotice" class="notice hidden"></div><div class="entry-grid" id="specialFields"></div></div>
           <div class="actions"><button class="btn btn-soft" id="saveSpecialDraft">暫存</button><button class="btn btn-primary" id="submitSpecialRecord">正式送出</button></div>
         </div></article>
+      </div>
+      </div>
+      <aside class="card" id="calculationGuide" aria-labelledby="calculationGuideTitle"><div class="card-head"><h2 id="calculationGuideTitle">計算說明</h2></div><div class="card-body"><div class="formula calculation-guide" id="calculationRules"></div><h3 style="font-size:15px;margin:22px 0 12px">今日班別進度</h3><div class="side-list" id="shiftProgress"></div></div></aside>
       </div>
     </section>
 

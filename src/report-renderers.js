@@ -37,11 +37,41 @@ function getBase(){
 function renderEntry(){
   const operational=operationalUnits.find(x=>x.id===session.unit);
   $('#standardEntryGrid').classList.toggle('hidden',!!operational);$('#specialEntryView').classList.toggle('hidden',!operational);
+  renderCalculationGuide(operational);renderProgress();
   if(operational){renderSpecialForm();return}
   const u=units.find(x=>x.id===session.unit),data=store.get(),rec=data[key($('#entryDate').value,$('#entryShift').value,session.unit)]||emptyRecord(),base=getBase();
   $('#bedCount').textContent=u.beds;$('#openingControls').classList.toggle('hidden',session.role==='unit'||Object.keys(data).some(k=>k.endsWith('|'+session.unit)));$('#staff').value=rec.staff??'';renderEventFields(rec);$('#previous').value=base.value;
   $('#previousNotice').classList.toggle('hidden',base.ready);$('#previousNotice').textContent='前一班尚未正式送出，目前可暫存；前班完成後系統將依最新資料重新計算。';
-  setStatus(rec.status);calculate();renderProgress();
+  setStatus(rec.status);calculate();
+}
+function renderCalculationGuide(operational){
+  const common='實際上班人力可填至小數點第三位；其餘人數、人次及床數填非負整數，沒有數值請填 0。';
+  let rules;
+  if(!operational){
+    rules=['住院人數 ＝ 前班住院人數 ＋ 住院 − 出院 ＋ 機構內轉入 − 機構內轉出 − 死亡',
+      '空床數 ＝ 有效床數 − 住院人數；超床數 ＝ 住院人數 − 有效床數，兩者最低均為 0。',
+      '病危僅作狀態註記，不列入計算，也不影響住院或空床數。'];
+    const parts=admissionFieldsByUnit[session.unit];
+    if(parts)rules.push('住院合計 ＝ '+parts.map(([,label])=>label).join(' ＋ ')+'，兩欄相加後計入住院人數。');
+  }else{
+    const byType={
+      emergency:['來診、轉診入、轉診出、住院、留觀、死亡及手術，均由人員填寫當班數值。',
+        '全日來診人數、住院人次分別為 N 班 ＋ D 班 ＋ E 班；當日留觀顯示 E 班留觀人數。',
+        '急診資料於特殊單位營運統整呈現，住院欄位不套用病房的前班住院人數公式。'],
+      delivery:['來診、留觀、待產、剖腹產、自然產及 DR 手術，均由人員填寫當班數值。',
+        '全日來診、自然產及剖腹產，分別為 N 班 ＋ D 班 ＋ E 班。'],
+      operatingRoom:['IN、OUT 分開填寫當班數值。',
+        '全日 IN ＝ N 班 IN ＋ D 班 IN ＋ E 班 IN；全日 OUT 以相同方式加總。'],
+      nursingHome:['上班人力 ＝ 護理師 ＋ 護佐，由系統自動合計；兩種職類分開填寫，均可至小數點第三位。',
+        '住民人數、實際使用床數、保留床位、住院及出院，由人員填寫當班數值。',
+        '當日住民與保留床位採 E 班數值；空床 ＝ 參考床數 − E 班住民人數 − E 班保留床位，最低為 0。',
+        '三班護理師、護佐及上班人力，分別為 N 班 ＋ D 班 ＋ E 班。'],
+      dialysis:['血液透析分門診、住院、重症三欄，分別填寫當班人次；腹膜透析另行填寫。',
+        '全日血液透析門診、住院、重症，分別為各自的 N 班 ＋ D 班 ＋ E 班；腹膜透析也分開加總。']
+    };
+    rules=byType[operational.type]||['各欄由人員填寫當班數值。'];
+  }
+  $('#calculationRules').replaceChildren(...[...rules,common].map(text=>{const p=document.createElement('p');p.textContent=text;return p;}));
 }
 function operationalKey(date,shift,unit){return `OPS|${date}|${shift}|${unit}`}
 function hasNursingHomeStaffSplit(record){return nursingHomeStaffFields.every(field=>record[field]!==undefined&&record[field]!==null&&record[field]!=='')}
@@ -92,7 +122,7 @@ async function save(status){
 }
 $('#saveDraft').onclick=()=>save('draft');
 $('#submitRecord').onclick=()=>{if(!getBase().ready){void save('draft').then(ok=>{if(ok)toast('前班未完成，已先暫存；第一班請管理者設定期初人數')})}else void save('submitted')};
-function renderProgress(){const data=store.get(),date=$('#entryDate').value;$('#shiftProgress').innerHTML=shifts.map(s=>{const r=data[key(date,s,session.unit)]||emptyRecord(),txt=r.status==='submitted'?'已完成':r.status==='draft'?'已暫存':'待填報';return `<div class="side-item"><div><b>${s} 班</b><small>${s==='N'?'00:00–08:00':s==='D'?'08:00–16:00':'16:00–24:00'}</small></div><span class="status ${r.status}">${txt}</span></div>`}).join('')}
+function renderProgress(){const data=store.get(),operational=operationalUnits.some(u=>u.id===session.unit),date=$(operational?'#specialDate':'#entryDate').value;$('#shiftProgress').innerHTML=shifts.map(s=>{const recordKey=operational?operationalKey(date,s,session.unit):key(date,s,session.unit),r=data[recordKey]||emptyRecord(),txt=r.status==='submitted'?'已完成':r.status==='draft'?'已暫存':'待填報';return `<div class="side-item"><div><b>${s} 班</b><small>${s==='N'?'00:00–08:00':s==='D'?'08:00–16:00':'16:00–24:00'}</small></div><span class="status ${r.status}">${txt}</span></div>`}).join('')}
 
 function renderAlerts(data){
   const alerts=[],required=['staff','住院','出院','轉入','轉出','病危','死亡'],start=new Date(alertFrom()+'T12:00:00Z'),end=new Date($('#dashboardDate').value+'T12:00:00Z');end.setUTCDate(end.getUTCDate()-1);
@@ -156,7 +186,7 @@ return {
   render(member){session=member;if(!session)return;renderEntry();if(session.role!=='unit')renderDashboard();},
   clear(){
     session=null;
-    ['#unitTable','#occupancyChart','#pendingList','#specialOpsTable','#alertTable','#eventFields','#specialFields','#shiftProgress'].forEach(id=>$(id).replaceChildren());
+    ['#unitTable','#occupancyChart','#pendingList','#specialOpsTable','#alertTable','#eventFields','#specialFields','#shiftProgress','#calculationRules'].forEach(id=>$(id).replaceChildren());
     $$('.metric .value').forEach(el=>el.textContent='—');
     ['#staff','#previous'].forEach(id=>$(id).value='');
   }

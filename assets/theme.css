@@ -99,6 +99,9 @@ dialog p { line-height: 1.7; }
 .metric.warning { background: var(--card); border-color: var(--line); border-top-color: #e0ae6d; }
 .metric.warning .value { color: var(--warn); }
 .grid-2 { display: grid; grid-template-columns: 1.4fr .9fr; gap: 20px; }
+.entry-forms { min-width: 0; }
+.calculation-guide p { margin: 0 0 14px; }
+.calculation-guide p:last-child { margin-bottom: 0; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
 .card-head { padding: 18px 20px; background: linear-gradient(90deg, #f0f7fc, #fff); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .card-head h2 { font-size: 17px; margin: 0; color: var(--navy); display: flex; align-items: center; gap: 8px; }

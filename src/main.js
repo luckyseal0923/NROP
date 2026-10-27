@@ -1,4 +1,4 @@
-import { supabase, rpc, errorMessage, requireApprovalOnlySignup, confirmBedChange } from './api.js';
+import { supabase, rpc, errorMessage, requireApprovalOnlySignup, confirmBedChange, initializeAuthRedirect } from './api.js';
 import { units, operationalUnits, allLoginUnits } from './catalog.js';
 import { RecordStore, dateOffset, escapeHtml as esc } from './record-store.js';
 import { $, $$, today } from './dom.js';
@@ -205,8 +205,17 @@ $('#forgotPassword').onclick=()=>void authAction($('#loginForm'),async()=>{
  const {error}=await supabase.auth.resetPasswordForEmail($('#account').value.trim(),{redirectTo:location.origin});
  if(error)throw error;feedback('#authMessage','若此 Email 可接收重設信，系統將寄送連結。未收到時請聯絡管理者確認 SMTP 設定。');
 });
-$('#changePasswordBtn').onclick=()=>{$('#passwordForm').reset();feedback('#passwordMessage','');$('#passwordDialog').showModal();};
-$('#cancelPassword').onclick=()=>{$('#passwordDialog').close();passwordRecovery=false;void resolveMembership();};
+function showPasswordDialog(){
+ $('#passwordForm').reset();feedback('#passwordMessage','');
+ if(!$('#passwordDialog').open)$('#passwordDialog').showModal();
+}
+$('#changePasswordBtn').onclick=showPasswordDialog;
+function cancelPassword(){
+ $('#passwordDialog').close();$('#passwordForm').reset();
+ if(passwordRecovery)void logout();else void resolveMembership();
+}
+$('#cancelPassword').onclick=cancelPassword;
+$('#passwordDialog').addEventListener('cancel',event=>{event.preventDefault();cancelPassword();});
 $('#passwordForm').onsubmit=e=>{e.preventDefault();void(async()=>{
  const password=$('#newPassword').value;
  if(!validPassword(password)){feedback('#passwordMessage','密碼至少 6 碼，包含英文與數字',true);return;}
@@ -264,10 +273,12 @@ async function init(){
  try{
   if(!supabase)throw new Error('請先依 README 設定 .env.local，並用 npm run dev 啟動。');
   supabase.auth.onAuthStateChange(event=>{
-   if(event==='SIGNED_OUT'){authEpoch++;clearApp();}
-   if(event==='PASSWORD_RECOVERY'){passwordRecovery=true;setTimeout(()=>{$('#accountDialog').close();if(!$('#passwordDialog').open)$('#passwordDialog').showModal();},0);}
+   if(event==='SIGNED_OUT'){authEpoch++;passwordRecovery=false;clearApp();}
+   if(event==='PASSWORD_RECOVERY'){passwordRecovery=true;setTimeout(()=>{$('#accountDialog').close();showPasswordDialog();},0);}
    // 不在 Auth 的同步 callback 裡呼叫其他 Auth 方法，避免鎖死工作階段。
   });
+  const redirect=await initializeAuthRedirect();
+  if(redirect.recovery){passwordRecovery=true;$('#accountDialog').close();showPasswordDialog();}
   await loadConfig();await resolveMembership();
  }catch(error){feedback('#connectionStatus',errorMessage(error),true);}
 }

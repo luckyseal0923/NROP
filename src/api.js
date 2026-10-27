@@ -1,11 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
+import { createAuthStorage, completeAuthRedirect } from './auth-recovery.js';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const storageKey = url ? `sb-${new URL(url).hostname.split('.')[0]}-auth-token` : '';
 export const supabase = url && key ? createClient(url, key, {
-  auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true, flowType: 'pkce' },
+  auth: {
+    storageKey,
+    storage: createAuthStorage({session:window.sessionStorage,shared:()=>window.localStorage,storageKey}),
+    persistSession: true, autoRefreshToken: true, flowType: 'pkce', detectSessionInUrl: false
+  },
   global: { fetch: (input,init={})=>fetch(input,{...init,signal:init.signal||AbortSignal.timeout(15000)}) }
 }) : null;
+
+export async function initializeAuthRedirect() {
+  if(!supabase)throw new Error('尚未設定 Supabase');
+  return completeAuthRedirect({auth:supabase.auth,location:window.location,history:window.history});
+}
 
 export async function rpc(name, params = {}) {
   if (!supabase) throw new Error('尚未設定 Supabase，請參閱安裝說明設定 .env.local。');

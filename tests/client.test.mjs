@@ -21,12 +21,12 @@ async function source(){
  if(!bundled)bundled=(await build({entryPoints:['src/main.js'],bundle:true,write:false,format:'iife',platform:'browser',
   define:{__NROP_RELEASE__:JSON.stringify({version:'1.1.0',displayVersion:'NROP-20261027-01',buildId:'a'.repeat(32),builtAt:'2026-10-27T01:00:00Z'}),'import.meta.env.PROD':'true','import.meta.env.BASE_URL':'"/"'},
   plugins:[{name:'fake-api',setup(build){build.onLoad({filter:/[\\/]src[\\/]api\.js$/},()=>({contents:
-   'export const supabase=window.__api.supabase;export const rpc=window.__api.rpc;export const errorMessage=e=>e.message;export const requireApprovalOnlySignup=window.__api.requireApprovalOnlySignup;export const confirmBedChange=window.__api.confirmBedChange;'}));}}]
+   'export const supabase=window.__api.supabase;export const rpc=window.__api.rpc;export const errorMessage=e=>e.message;export const requireApprovalOnlySignup=window.__api.requireApprovalOnlySignup;export const confirmBedChange=window.__api.confirmBedChange;export const initializeAuthRedirect=window.__api.initializeAuthRedirect;'}));}}]
  })).outputFiles[0].text;
  return bundled;
 }
 const wait=async(condition)=>{for(let i=0;i<100;i++){if(condition())return;await new Promise(r=>setTimeout(r,5));}throw new Error('UI 等候逾時');};
-async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSchema=true,bedSchema=true,records=[],unit='7A',capacities=[],bedHistory=[]}={}){
+async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSchema=true,bedSchema=true,records=[],unit='7A',capacities=[],bedHistory=[],recovery=false,redirectError=''}={}){
  const dom=new JSDOM(readFileSync('index.html','utf8'),{url:'https://nrop.example.invalid',runScripts:'outside-only'}),w=dom.window,$=s=>w.document.querySelector(s);
  const calls=[];let current=null;let offline=false;
  w.fetch=async()=>({ok:true,headers:{get:()=> 'application/json'},json:async()=>({version:'1.1.0',buildId:'a'.repeat(32),builtAt:'2026-10-27T01:00:00Z'})});
@@ -50,11 +50,52 @@ async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSche
   throw new Error('未預期 RPC '+name);
  }};
  w.__api.confirmBedChange=async params=>{calls.push({name:'bed.confirm',params});if(params.password==='wrong')throw new Error('Email 或密碼錯誤');bedRows.push({unit:prepared.p_unit,effectiveDate:prepared.p_date,beds:prepared.p_beds});return{};};
- w.eval(await source());await wait(()=>$('#connectionStatus').textContent.includes(sharedSchema?'已連線':'單一資料區'));
+ w.__api.initializeAuthRedirect=async()=>{if(redirectError)throw new Error(redirectError);if(recovery)current=member;return{recovery};};
+ w.__api.supabase.auth.resetPasswordForEmail=async(email,options)=>{calls.push({name:'auth.recover',params:{email,options}});return{};};
+ w.eval(await source());await wait(()=>$('#connectionStatus').textContent.includes(redirectError||(sharedSchema?'已連線':'單一資料區')));
  const login=async(password='correct')=>{$('#account').value=member.email;$('#password').value=password;$('#loginForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await wait(()=>!$('#loginForm button[type="submit"]').disabled);};
  const selectUnit=unit=>{const select=$($('#standardEntryGrid').classList.contains('hidden')?'#specialUnitSelect':'#entryUnitSelect');assert.ok(select,'目前卡片必須有單位切換選單');select.value=unit;select.dispatchEvent(new w.Event('change'));};
  return{dom,w,$,calls,login,selectUnit,setOffline:value=>offline=value};
 }
+
+test('重設驗證成功直接開新密碼框，更新前不查帳號或載入填報',async()=>{
+ const {dom,w,$,calls}=await mount('unit',{recovery:true});
+ try{
+  assert.equal($('#passwordDialog').open,true);assert.equal($('#accountDialog').open,false);
+  assert.ok($('#appView').classList.contains('hidden'));
+  assert.equal(calls.some(c=>c.name==='nrop_current_account'),false);
+  $('#newPassword').value='Abc123';$('#confirmPassword').value='Abc124';
+  $('#passwordForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+  assert.ok($('#passwordMessage').textContent.includes('兩次密碼不同'));assert.equal(calls.some(c=>c.name==='auth.updateUser'),false);
+  $('#confirmPassword').value='Abc123';$('#passwordForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+  await wait(()=>!$('#passwordForm button[type="submit"]').disabled);
+  assert.equal(calls.find(c=>c.name==='auth.updateUser').params.password,'Abc123');
+  assert.equal($('#passwordDialog').open,false);assert.equal($('#newPassword').value,'');
+  assert.ok(!$('#loginView').classList.contains('hidden'));assert.ok($('#toast').textContent.includes('請重新登入'));
+ }finally{dom.window.close();}
+});
+
+test('取消或 Escape 離開重設會登出並清空輸入，不進入平台',async()=>{
+ for(const method of ['button','escape']){
+  const {dom,w,$,calls}=await mount('unit',{recovery:true});
+  try{
+   $('#newPassword').value='Abc123';$('#password').value='synthetic-before-logout';
+   if(method==='button')$('#cancelPassword').click();else $('#passwordDialog').dispatchEvent(new w.Event('cancel',{cancelable:true}));
+   await wait(()=>!$('#passwordDialog').open&&$('#password').value==='');
+   assert.equal($('#newPassword').value,'');assert.equal(calls.some(c=>c.name==='nrop_current_account'||c.name==='auth.updateUser'),false);
+   assert.ok(!$('#loginView').classList.contains('hidden'));
+  }finally{dom.window.close();}
+ }
+});
+
+test('缺少或失效的重設驗證顯示說明，忘記密碼仍可申請新信',async()=>{
+ const {dom,$,calls}=await mount('unit',{redirectError:'找不到這次重設的驗證資料，請重新按「忘記密碼」。'});
+ try{
+  assert.equal($('#passwordDialog').open,false);assert.ok($('#connectionStatus').textContent.includes('驗證資料'));
+  $('#account').value='member@example.invalid';$('#forgotPassword').click();await wait(()=>!$('#forgotPassword').disabled);
+  assert.equal(calls.find(c=>c.name==='auth.recover').params.options.redirectTo,'https://nrop.example.invalid');
+ }finally{dom.window.close();}
+});
 test('登入及填報頁共用版本入口，平台使用者更新前可保留未儲存內容',async()=>{
  const {dom,w,$,login}=await mount();let confirmations=0;
  try{

@@ -25,7 +25,7 @@
       </div>
       <div class="login-form">
         <div class="subtabs auth-tabs"><button type="button" class="subtab active" data-auth="login">登入</button><button type="button" class="subtab" data-auth="register">申請帳號</button></div>
-        <div id="connectionStatus" class="notice" role="status">正在連接 Supabase…</div>
+        <div id="registrationNotice" class="notice hidden" role="status"></div>
         <form id="loginForm"><h2>登入平台</h2><p>使用 Email 與密碼登入，權限依核准的帳號決定。</p>
           <div class="field"><label for="account">Email 帳號</label><input id="account" type="email" autocomplete="username" required maxlength="254"></div>
           <div class="field"><label for="password">密碼</label><input id="password" type="password" autocomplete="current-password" required></div>
@@ -38,6 +38,7 @@
           <div class="field"><label for="registerPassword">密碼（至少 6 碼，含英文與數字）</label><input id="registerPassword" type="password" required minlength="6" autocomplete="new-password"></div>
           <button class="btn btn-primary" type="submit">送出申請</button>
         </form>
+        <div id="connectionError" class="notice error hidden" role="alert"></div>
         <div id="authMessage" class="notice hidden" role="status" aria-live="polite"></div>
       </div>
     </section>
@@ -137,9 +138,14 @@
     <div id="bedConfirmFeedback" class="notice hidden" role="alert"></div>
     <div class="actions"><button type="button" class="btn btn-soft" id="cancelBedConfirm">取消</button><button type="submit" class="btn btn-primary">驗證並儲存床數</button></div>
   </form></dialog>
-  <footer class="site-footer" aria-label="網站版本">
-    <span id="appVersion"></span>
-    <button type="button" class="btn btn-soft" id="checkVersion">檢查更新</button>
+  <footer class="site-footer" aria-label="系統資訊與網站版本">
+    <div class="footer-meta">
+      <span id="appVersion"></span>
+      <span class="footer-separator" aria-hidden="true">｜</span>
+      <span id="connectionStatus" role="status" data-state="loading">連線中…</span>
+      <span class="footer-separator" aria-hidden="true">｜</span>
+      <button type="button" class="btn btn-link" id="checkVersion">檢查更新</button>
+    </div>
     <span id="versionStatus" role="status" aria-live="polite"></span>
   </footer>
   <section class="update-notice hidden" id="updateNotice" aria-label="網站更新通知">

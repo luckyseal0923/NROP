@@ -1,7 +1,7 @@
 {
   "name": "nrop-nursing-platform",
   "version": "1.1.0",
-  "nropRelease": "20261027-03",
+  "nropRelease": "20261027-04",
   "private": true,
   "type": "module",
   "engines": {

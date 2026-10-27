@@ -27,6 +27,11 @@ createVersionChecker({window,current:__NROP_RELEASE__,base:import.meta.env.BASE_
  isBusy:()=>busy||loading||bedManagement.isBusy()||$$('#loginForm [type="submit"],#registerForm [type="submit"],#joinForm [type="submit"],#passwordForm [type="submit"],[data-save-account],#registrationOpen').some(button=>button.disabled)
 });
 const feedback=(selector,message,error=false)=>{const el=$(selector);el.textContent=message;el.classList.toggle('hidden',!message);el.classList.toggle('error',error);};
+function setConnectionStatus(state,message=''){
+ const status=$('#connectionStatus');
+ status.textContent={loading:'連線中…',ready:'連線可用',error:'連線異常'}[state];status.dataset.state=state;
+ feedback('#connectionError',message,state==='error');
+}
 function toast(message){feedback('#toast',message);clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('#toast').classList.add('hidden'),4500);}
 function setDates(date){['#entryDate','#specialDate','#dashboardDate'].forEach(id=>$(id).value=date);}
 function alertFrom(){
@@ -60,6 +65,8 @@ function changeUnit(unit){
  session.unit=unit;$('#entryShift').value=shift;$('#specialShift').value=shift;renderUnitControls();renderReporting();
 }
 async function loadConfig(){
+ setConnectionStatus('loading');
+ try{
  const loaded=await rpc('nrop_public_config');
  if(!loaded?.units?.length)throw new Error('資料庫尚無單位設定，請執行完整 INSTALL.sql。');
  if(loaded.dataArea!=='shared')throw new Error('資料庫尚未更新為單一資料區，請在 SQL Editor 執行 UPGRADE_005_007.sql 後重新整理。');
@@ -69,7 +76,9 @@ async function loadConfig(){
  const applicationUnits=config.applicationUnits||[{id:'護理部'},...config.units];
  ['#registerUnit','#joinUnit'].forEach(id=>$(id).innerHTML=applicationUnits.map(u=>`<option value="${esc(u.id)}">${esc(u.id)}</option>`).join(''));
  document.querySelector('[data-auth="register"]').disabled=!config.registrationOpen;
- feedback('#connectionStatus',`已連線 Supabase${config.registrationOpen?'':' · 目前暫停新帳號申請'}`);
+ feedback('#registrationNotice',config.registrationOpen?'':'目前暫停新帳號申請');
+ setConnectionStatus('ready');
+ }catch(error){setConnectionStatus('error',errorMessage(error));throw error;}
 }
 async function refreshData(){
  if(!session||loading)return false;
@@ -203,7 +212,7 @@ $$('[data-auth]').forEach(button=>button.onclick=()=>{
 $('#forgotPassword').onclick=()=>void authAction($('#loginForm'),async()=>{
  if(!$('#account').reportValidity())return;
  const {error}=await supabase.auth.resetPasswordForEmail($('#account').value.trim(),{redirectTo:location.origin});
- if(error)throw error;feedback('#authMessage','若此 Email 可接收重設信，系統將寄送連結。未收到時請聯絡管理者確認 SMTP 設定。');
+ if(error)throw error;feedback('#authMessage','若此 Email 可接收重設信，系統將寄送連結。未收到時請聯絡護理部確認網路設定。');
 });
 function showPasswordDialog(){
  $('#passwordForm').reset();feedback('#passwordMessage','');
@@ -277,9 +286,11 @@ async function init(){
    if(event==='PASSWORD_RECOVERY'){passwordRecovery=true;setTimeout(()=>{$('#accountDialog').close();showPasswordDialog();},0);}
    // 不在 Auth 的同步 callback 裡呼叫其他 Auth 方法，避免鎖死工作階段。
   });
-  const redirect=await initializeAuthRedirect();
-  if(redirect.recovery){passwordRecovery=true;$('#accountDialog').close();showPasswordDialog();}
+  try{
+   const redirect=await initializeAuthRedirect();
+   if(redirect.recovery){passwordRecovery=true;$('#accountDialog').close();showPasswordDialog();}
+  }catch(error){feedback('#authMessage',errorMessage(error),true);}
   await loadConfig();await resolveMembership();
- }catch(error){feedback('#connectionStatus',errorMessage(error),true);}
+ }catch(error){setConnectionStatus('error',errorMessage(error));}
 }
 void init();

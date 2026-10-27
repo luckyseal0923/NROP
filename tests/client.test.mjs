@@ -26,12 +26,12 @@ async function source(){
  return bundled;
 }
 const wait=async(condition)=>{for(let i=0;i<100;i++){if(condition())return;await new Promise(r=>setTimeout(r,5));}throw new Error('UI 等候逾時');};
-async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSchema=true,bedSchema=true,records=[],unit='7A',capacities=[],bedHistory=[],recovery=false,redirectError=''}={}){
+async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSchema=true,bedSchema=true,records=[],unit='7A',capacities=[],bedHistory=[],recovery=false,redirectError='',registrationOpen=true,configError=''}={}){
  const dom=new JSDOM(readFileSync('index.html','utf8'),{url:'https://nrop.example.invalid',runScripts:'outside-only'}),w=dom.window,$=s=>w.document.querySelector(s);
- const calls=[];let current=null;let offline=false;
+ const calls=[];let current=null;let offline=false;let configFailure=configError;
  w.fetch=async()=>({ok:true,headers:{get:()=> 'application/json'},json:async()=>({version:'1.1.0',buildId:'a'.repeat(32),builtAt:'2026-10-27T01:00:00Z'})});
  const member={userId:'member-1',name:'測試人員',email:'member@example.invalid',role,status:'active',unit:role==='unit'?unit:null,version:1};
- const config={registrationOpen:true,dataArea:sharedSchema?'shared':undefined,bedCapacityManagement:bedSchema,recordStartDate:'2026-08-01',latestRecordDate:'2026-10-25',units:allLoginUnits.map(u=>({id:u.id,beds:u.beds,type:u.type}))};
+ const config={registrationOpen,dataArea:sharedSchema?'shared':undefined,bedCapacityManagement:bedSchema,recordStartDate:'2026-08-01',latestRecordDate:'2026-10-25',units:allLoginUnits.map(u=>({id:u.id,beds:u.beds,type:u.type}))};
  const bedRows=[...allLoginUnits.map(u=>({unit:u.id,effectiveDate:'2000-01-01',beds:u.beds})),...capacities];let prepared;
  if(updatedSchema)config.applicationUnits=[{id:'護理部',reportUnit:null},...config.units.map(u=>({id:u.id,reportUnit:u.id}))];
  for(const dialog of w.document.querySelectorAll('dialog')){dialog.showModal=()=>dialog.setAttribute('open','');dialog.close=()=>dialog.removeAttribute('open');}
@@ -39,7 +39,7 @@ async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSche
  async signInWithPassword(credentials){if(credentials.password==='wrong')return{error:{message:'密碼錯誤'}};current=member;return{data:{session:{}}};},
  async signOut(){current=null;return{};},async signUp(params){calls.push({name:'auth.signUp',params});current={...member,status:'pending',name:params.options.data.display_name,requestedUnit:params.options.data.requested_unit,unit:null};return{data:{session:{}}};},async updateUser(params){calls.push({name:'auth.updateUser',params});return{};}}},rpc:async(name,params={})=>{
   calls.push({name,params});if(offline)throw new Error('offline');
-  if(name==='nrop_public_config')return config;if(name==='nrop_current_account')return current;
+  if(name==='nrop_public_config'){if(configFailure)throw new Error(configFailure);return config;}if(name==='nrop_current_account')return current;
   if(name==='nrop_request_access')return current;
   if(name==='nrop_list_records')return records;if(name==='nrop_list_openings')return[];
   if(name==='nrop_list_bed_capacities')return bedRows;
@@ -52,10 +52,10 @@ async function mount(role='unit',{updatedSchema=true,autoConfirm=true,sharedSche
  w.__api.confirmBedChange=async params=>{calls.push({name:'bed.confirm',params});if(params.password==='wrong')throw new Error('Email 或密碼錯誤');bedRows.push({unit:prepared.p_unit,effectiveDate:prepared.p_date,beds:prepared.p_beds});return{};};
  w.__api.initializeAuthRedirect=async()=>{if(redirectError)throw new Error(redirectError);if(recovery)current=member;return{recovery};};
  w.__api.supabase.auth.resetPasswordForEmail=async(email,options)=>{calls.push({name:'auth.recover',params:{email,options}});return{};};
- w.eval(await source());await wait(()=>$('#connectionStatus').textContent.includes(redirectError||(sharedSchema?'已連線':'單一資料區')));
+ w.eval(await source());await wait(()=>configError?$('#connectionError').textContent.includes(configError):sharedSchema?$('#connectionStatus').textContent==='連線可用':$('#connectionError').textContent.includes('單一資料區'));
  const login=async(password='correct')=>{$('#account').value=member.email;$('#password').value=password;$('#loginForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await wait(()=>!$('#loginForm button[type="submit"]').disabled);};
  const selectUnit=unit=>{const select=$($('#standardEntryGrid').classList.contains('hidden')?'#specialUnitSelect':'#entryUnitSelect');assert.ok(select,'目前卡片必須有單位切換選單');select.value=unit;select.dispatchEvent(new w.Event('change'));};
- return{dom,w,$,calls,login,selectUnit,setOffline:value=>offline=value};
+ return{dom,w,$,calls,login,selectUnit,setOffline:value=>offline=value,setConfigFailure:value=>configFailure=value};
 }
 
 test('重設驗證成功直接開新密碼框，更新前不查帳號或載入填報',async()=>{
@@ -91,9 +91,42 @@ test('取消或 Escape 離開重設會登出並清空輸入，不進入平台',a
 test('缺少或失效的重設驗證顯示說明，忘記密碼仍可申請新信',async()=>{
  const {dom,$,calls}=await mount('unit',{redirectError:'找不到這次重設的驗證資料，請重新按「忘記密碼」。'});
  try{
-  assert.equal($('#passwordDialog').open,false);assert.ok($('#connectionStatus').textContent.includes('驗證資料'));
+  assert.equal($('#passwordDialog').open,false);assert.ok($('#authMessage').textContent.includes('驗證資料'));
+  assert.equal($('#connectionStatus').textContent,'連線可用');
   $('#account').value='member@example.invalid';$('#forgotPassword').click();await wait(()=>!$('#forgotPassword').disabled);
   assert.equal(calls.find(c=>c.name==='auth.recover').params.options.redirectTo,'https://nrop.example.invalid');
+  assert.ok($('#authMessage').textContent.includes('未收到時請聯絡護理部確認網路設定。'));
+ }finally{dom.window.close();}
+});
+
+test('連線狀態與版本共用頁尾，登入成功後仍保留，登入卡片無正常連線橫幅',async()=>{
+ const {dom,$,login}=await mount();
+ try{
+  assert.equal($('#connectionStatus').closest('footer'),$('#appVersion').closest('footer'));
+  assert.equal($('#connectionStatus').closest('#loginView'),null);
+  assert.equal($('#connectionStatus').textContent,'連線可用');assert.equal($('#connectionStatus').classList.contains('notice'),false);
+  assert.ok($('#connectionError').classList.contains('hidden'));
+  await login();await wait(()=>!$('#refreshData').disabled);
+  assert.equal($('#connectionStatus').closest('.hidden,[hidden]'),null);
+ }finally{dom.window.close();}
+});
+
+test('連線失敗在登入區提供錯誤，再次登入重試成功會清除錯誤並恢復頁尾狀態',async()=>{
+ const {dom,$,login,setConfigFailure}=await mount('unit',{configError:'服務暫時無法連線，請稍後重試'});
+ try{
+  assert.equal($('#connectionStatus').textContent,'連線異常');assert.equal($('#connectionStatus').dataset.state,'error');
+  assert.ok(!$('#connectionError').classList.contains('hidden'));assert.equal($('#connectionError').closest('#loginView').id,'loginView');
+  setConfigFailure('');await login();await wait(()=>!$('#refreshData').disabled);
+  assert.equal($('#connectionStatus').textContent,'連線可用');assert.ok($('#connectionError').classList.contains('hidden'));
+ }finally{dom.window.close();}
+});
+
+test('暫停申請保留登入區提醒且不誤報為連線異常',async()=>{
+ const {dom,$}=await mount('unit',{registrationOpen:false});
+ try{
+  assert.equal($('#connectionStatus').textContent,'連線可用');
+  assert.equal($('#registrationNotice').textContent,'目前暫停新帳號申請');assert.ok(!$('#registrationNotice').classList.contains('hidden'));
+  assert.equal($('[data-auth="register"]').disabled,true);
  }finally{dom.window.close();}
 });
 test('登入及填報頁共用版本入口，平台使用者更新前可保留未儲存內容',async()=>{
@@ -334,7 +367,7 @@ test('系統管理者帳號頁安全轉義姓名；僅有一個資料區；讀�
 test('尚未整併的資料庫阻擋登入，提示更新 SQL 而不顯示空白填報',async()=>{
  const {dom,$,calls,login}=await mount('unit',{sharedSchema:false});
  try{
-  assert.ok($('#connectionStatus').textContent.includes('UPGRADE_005_007.sql'));
+  assert.ok($('#connectionError').textContent.includes('UPGRADE_005_007.sql'));
   await login();assert.ok($('#authMessage').textContent.includes('UPGRADE_005_007.sql'));
   assert.equal(calls.filter(c=>c.name==='nrop_list_records').length,0);
   assert.ok($('#appView').classList.contains('hidden'));

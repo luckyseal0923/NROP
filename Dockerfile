@@ -10,6 +10,7 @@ ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 COPY index.html vite.config.js ./
 COPY src ./src
 COPY assets ./assets
+COPY public ./public
 RUN npm run build
 
 FROM nginx:alpine
